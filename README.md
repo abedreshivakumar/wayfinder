@@ -67,7 +67,7 @@ the language server first, so the graph is exact and every explanation is ground
 
 ```bash
 npm install -g pyright            # provides pyright-langserver
-git clone <this repo> && cd wayfinder
+git clone https://github.com/abedreshivakumar/wayfinder.git && cd wayfinder
 uv sync
 claude mcp add wayfinder -- uv run --directory "$PWD" python -m wayfinder.mcp_server
 ```
