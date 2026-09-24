@@ -1,0 +1,279 @@
+<title>Donkeymind Build Flow</title>
+<style>
+  :root {
+    --bg: #faf8f4;
+    --surface: #ffffff;
+    --surface-2: #f2ede3;
+    --border: #e2ddd0;
+    --text: #221f1a;
+    --text-dim: #6b6355;
+    --accent: #b5651d;
+    --accent-ink: #7a4113;
+    --flow: #3d6b5c;
+    --flow-ink: #294a3f;
+    --ok: #3d6b5c;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --sans: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15130f; --surface: #1c1914; --surface-2: #232019; --border: #35301f;
+      --text: #f1ece0; --text-dim: #a89b83; --accent: #e0973f; --accent-ink: #f4c078;
+      --flow: #6fb89a; --flow-ink: #9fd6bd; --ok: #6fb89a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15130f; --surface: #1c1914; --surface-2: #232019; --border: #35301f;
+    --text: #f1ece0; --text-dim: #a89b83; --accent: #e0973f; --accent-ink: #f4c078;
+    --flow: #6fb89a; --flow-ink: #9fd6bd; --ok: #6fb89a;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--serif);
+    margin: 0; padding-inline: 16px; line-height: 1.55;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding-block: 48px 80px; }
+  header.page { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent-ink); margin: 0 0 10px;
+  }
+  h1 {
+    font-family: var(--sans); font-weight: 800; font-size: clamp(28px, 5vw, 38px);
+    letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance;
+  }
+  .sub { color: var(--text-dim); font-size: 17px; max-width: 64ch; margin: 0; }
+  h2 {
+    font-family: var(--sans); font-weight: 700; font-size: 21px; margin: 0 0 4px; letter-spacing: -0.005em;
+  }
+  h2 .n { font-family: var(--mono); color: var(--accent-ink); font-weight: 500; font-size: 15px; margin-right: 10px; }
+  section { margin-block: 46px; }
+  .lede { color: var(--text-dim); max-width: 68ch; margin: 6px 0 20px; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--sans); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; }
+  td.tag { font-family: var(--mono); font-size: 12.5px; color: var(--accent-ink); white-space: nowrap; }
+
+  .phase {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 22px 24px; margin-top: 18px;
+  }
+  .phase + .phase { margin-top: 16px; }
+  .phase-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .phase-num {
+    font-family: var(--mono); font-size: 13px; color: var(--bg); background: var(--accent);
+    border-radius: 5px; padding: 2px 8px; flex-shrink: 0;
+  }
+  .phase h3 { font-family: var(--sans); font-size: 17px; margin: 0; }
+  .phase .goal { color: var(--text-dim); font-size: 14.5px; margin: 0 0 14px; max-width: 64ch; }
+
+  .phase-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 640px) { .phase-grid { grid-template-columns: 1fr; } }
+
+  .phase h4 {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--text-dim); margin: 0 0 8px;
+  }
+  .phase ul { margin: 0; padding-left: 18px; font-size: 14px; }
+  .phase ul li { margin-bottom: 5px; }
+  .phase code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+  .exit {
+    margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border);
+    font-size: 13.5px; color: var(--flow-ink); font-family: var(--mono);
+  }
+  .exit b { color: var(--text); font-family: var(--sans); font-weight: 600; }
+
+  .checklist { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-direction: column; gap: 10px; }
+  .checklist li {
+    display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+  }
+  .checklist .box {
+    width: 16px; height: 16px; border: 1.5px solid var(--accent); border-radius: 4px; flex-shrink: 0; margin-top: 2px;
+  }
+
+  .env-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; }
+  .env-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;
+  }
+  .env-card .label { font-family: var(--mono); font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .env-card .val { font-family: var(--mono); font-size: 14px; margin-top: 4px; color: var(--ok); }
+
+  footer {
+    margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+  }
+  @media (max-width: 640px) { .wrap { padding-block: 32px 56px; } }
+</style>
+
+<div class="wrap">
+
+  <header class="page">
+    <p class="eyebrow">Build flow &mdash; companion to the architecture doc</p>
+    <h1>v0.1 Build Plan</h1>
+    <p class="sub">The literal sequence to follow, phase by phase &mdash; what to build, what to read first, and the exact check that proves the phase actually works before moving to the next one.</p>
+  </header>
+
+  <section id="env">
+    <h2><span class="n">00</span>Environment, already confirmed available</h2>
+    <p class="lede">Checked on this machine before writing anything &mdash; nothing new to install to start Phase 1.</p>
+    <div class="env-grid">
+      <div class="env-card"><div class="label">Python</div><div class="val">3.12 via uv</div></div>
+      <div class="env-card"><div class="label">Language server</div><div class="val">pyright 1.1.414</div></div>
+      <div class="env-card"><div class="label">Node</div><div class="val">v22.23.2</div></div>
+      <div class="env-card"><div class="label">Project root</div><div class="val">~/Desktop/Agentic/Donkeymind</div></div>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <h2><span class="n">01</span>Decision log</h2>
+    <p class="lede">What was chosen and why &mdash; full detail and diagrams in the architecture doc; this is the reference copy so a build decision never has to be re-litigated mid-phase.</p>
+    <table>
+      <tr><th>Decision</th><th>Choice</th><th>Traded away</th></tr>
+      <tr><td class="tag">scope</td><td>Call structure + data flow together in v0.1</td><td>Longer stretch before first demo, vs. phasing data flow separately</td></tr>
+      <tr><td class="tag">lsp client</td><td>Hand-written raw JSON-RPC over stdio</td><td>More code up front, vs. a wrapping library</td></tr>
+      <tr><td class="tag">input</td><td>Single file, exact <code>file:line:col</code></td><td>No name-based symbol search yet</td></tr>
+      <tr><td class="tag">persistence</td><td>None &mdash; recompute every request</td><td>Slower repeat queries, vs. a cache</td></tr>
+    </table>
+  </section>
+
+  <section id="phases">
+    <h2><span class="n">02</span>Phases</h2>
+    <p class="lede">Each phase has one exit criterion. Don't start the next phase until the current one's exit criterion is actually true &mdash; not "probably works," actually observed.</p>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-num">Phase 1</span><h3>LSP handshake, proven on one real symbol</h3></div>
+      <p class="goal">Talk to pyright directly and get one real <code>CallHierarchyItem</code> back. This is pure protocol plumbing &mdash; no graph logic yet.</p>
+      <div class="phase-grid">
+        <div>
+          <h4>Read first</h4>
+          <ul>
+            <li>LSP spec &mdash; Base Protocol (framing)</li>
+            <li>LSP spec &mdash; Call Hierarchy section</li>
+            <li>pyright README + import-resolution doc</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Build</h4>
+          <ul>
+            <li>Spawn <code>pyright-langserver --stdio</code></li>
+            <li><code>initialize</code> &rarr; <code>initialized</code> &rarr; <code>didOpen</code></li>
+            <li><code>prepareCallHierarchy</code> at a known position</li>
+          </ul>
+        </div>
+      </div>
+      <p class="exit"><b>Exit check:</b> raw JSON printed to the terminal shows a correct <code>CallHierarchyItem</code> (right name, right file, right range) for a function you picked by hand.</p>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-num">Phase 2</span><h3>BFS expansion &rarr; graph.json</h3></div>
+      <p class="goal">Turn one item into a graph. Still no data flow &mdash; structure only.</p>
+      <div class="phase-grid">
+        <div>
+          <h4>Read first</h4>
+          <ul>
+            <li>Nothing new &mdash; same LSP spec section, now <code>incomingCalls</code>/<code>outgoingCalls</code></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Build</h4>
+          <ul>
+            <li>Walk incoming + outgoing calls, 2 hops out</li>
+            <li>Dedupe nodes by <code>(file, range)</code></li>
+            <li>Emit <code>{nodes: [...], edges: [...]}</code></li>
+          </ul>
+        </div>
+      </div>
+      <p class="exit"><b>Exit check:</b> you read the emitted JSON against the real source file by eye and every edge is a call that's actually there &mdash; no missing calls, no fabricated ones.</p>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-num">Phase 3</span><h3>AST + hover data-flow labels</h3></div>
+      <p class="goal">The differentiator. For every edge already in the graph, label it with what argument/return value threads through it.</p>
+      <div class="phase-grid">
+        <div>
+          <h4>Read first</h4>
+          <ul>
+            <li><code>ast</code> module docs &mdash; <code>NodeVisitor</code>, the ASDL grammar table</li>
+            <li>LSP spec &mdash; <code>textDocument/hover</code> (shape only; fire a real request and read the raw text before assuming structure)</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Build</h4>
+          <ul>
+            <li>Write one AST line/col &harr; LSP position converter, use it everywhere</li>
+            <li>Walk each call site, capture assigned variable + args</li>
+            <li>Hover each position, parse the type out of the markdown</li>
+            <li>Thread repeated variable names across hops</li>
+          </ul>
+        </div>
+      </div>
+      <p class="exit"><b>Exit check:</b> at least one edge in the graph shows a correct <code>var: Type</code> label that matches what the source actually does, on a real (not toy) function.</p>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-num">Phase 4</span><h3>FastAPI wrapper</h3></div>
+      <p class="goal">Make phases 1&ndash;3 reachable over HTTP. No new logic &mdash; just an entry point.</p>
+      <div class="phase-grid">
+        <div>
+          <h4>Read first</h4>
+          <ul>
+            <li>FastAPI &mdash; Lifespan Events (subprocess must not spawn per-request)</li>
+            <li><code>asyncio</code> subprocess docs</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Build</h4>
+          <ul>
+            <li>pyright subprocess started once, in <code>lifespan</code></li>
+            <li><code>GET /graph?file=&amp;line=&amp;col=</code></li>
+            <li>Runs phases 1&ndash;3 fresh every call, returns JSON</li>
+          </ul>
+        </div>
+      </div>
+      <p class="exit"><b>Exit check:</b> <code>curl</code> against the running server returns the same correct graph you validated by hand in Phase 3.</p>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head"><span class="phase-num">Phase 5</span><h3>React Flow canvas</h3></div>
+      <p class="goal">First point the tool is usable by someone who isn't reading raw JSON.</p>
+      <div class="phase-grid">
+        <div>
+          <h4>Read first</h4>
+          <ul>
+            <li>xyflow.com/learn &mdash; Layouting (dagre/ELK, since LSP gives no positions)</li>
+            <li>xyflow.com &mdash; Custom Edges (for the type labels)</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Build</h4>
+          <ul>
+            <li>Fetch the graph, auto-layout with dagre</li>
+            <li>Render nodes + labeled edges</li>
+            <li>Click a node &rarr; re-fetch centered on it</li>
+          </ul>
+        </div>
+      </div>
+      <p class="exit"><b>Exit check:</b> someone other than you can open the page, click through a real function's call graph, and read the data-flow labels without you narrating it.</p>
+    </div>
+  </section>
+
+  <section id="dod">
+    <h2><span class="n">03</span>Definition of done for v0.1</h2>
+    <p class="lede">The whole MVP, stated as one scenario. If this works end to end, v0.1 is complete &mdash; nothing more is required before moving to the agent layer.</p>
+    <ul class="checklist">
+      <li><span class="box"></span>You paste a real <code>file:line:col</code> from an unfamiliar Python codebase into the running app.</li>
+      <li><span class="box"></span>Within a few seconds, a graph renders showing that function's real callers and callees, 2 hops out.</li>
+      <li><span class="box"></span>At least the direct edges show a correct data-flow label &mdash; what gets passed, as what type.</li>
+      <li><span class="box"></span>Clicking a neighboring node re-centers the graph on it, without a page reload.</li>
+      <li><span class="box"></span>Every edge shown is independently verifiable against the real source &mdash; nothing on screen came from a model guess.</li>
+    </ul>
+  </section>
+
+  <footer>donkeymind &middot; v0.1 build flow &middot; companion to the architecture document</footer>
+
+</div>

@@ -1,0 +1,457 @@
+<title>Donkeymind Architecture</title>
+<style>
+  :root {
+    --bg: #faf8f4;
+    --surface: #ffffff;
+    --surface-2: #f2ede3;
+    --border: #e2ddd0;
+    --text: #221f1a;
+    --text-dim: #6b6355;
+    --accent: #b5651d;
+    --accent-ink: #7a4113;
+    --flow: #3d6b5c;
+    --flow-ink: #294a3f;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --sans: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15130f;
+      --surface: #1c1914;
+      --surface-2: #232019;
+      --border: #35301f;
+      --text: #f1ece0;
+      --text-dim: #a89b83;
+      --accent: #e0973f;
+      --accent-ink: #f4c078;
+      --flow: #6fb89a;
+      --flow-ink: #9fd6bd;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15130f;
+    --surface: #1c1914;
+    --surface-2: #232019;
+    --border: #35301f;
+    --text: #f1ece0;
+    --text-dim: #a89b83;
+    --accent: #e0973f;
+    --accent-ink: #f4c078;
+    --flow: #6fb89a;
+    --flow-ink: #9fd6bd;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--serif);
+    margin: 0;
+    padding-inline: 16px;
+    line-height: 1.55;
+  }
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding-block: 48px 80px;
+  }
+  header.page {
+    margin-bottom: 44px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: clamp(28px, 5vw, 40px);
+    letter-spacing: -0.01em;
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+  .sub {
+    color: var(--text-dim);
+    font-size: 17px;
+    max-width: 62ch;
+    margin: 0;
+  }
+  h2 {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 22px;
+    margin: 0 0 4px;
+    letter-spacing: -0.005em;
+  }
+  h2 .n {
+    font-family: var(--mono);
+    color: var(--accent-ink);
+    font-weight: 500;
+    font-size: 15px;
+    margin-right: 10px;
+  }
+  section { margin-block: 52px; }
+  .lede {
+    color: var(--text-dim);
+    max-width: 68ch;
+    margin: 6px 0 20px;
+  }
+  figure {
+    margin: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  figcaption {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin-top: 12px;
+    text-align: center;
+  }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--text); font-family: var(--sans); }
+  svg .mono { font-family: var(--mono); }
+  svg .dim { fill: var(--text-dim); }
+  svg .accent-text { fill: var(--accent-ink); }
+  svg .flow-text { fill: var(--flow-ink); }
+  svg .box { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.3; }
+  svg .box-accent { fill: var(--surface-2); stroke: var(--accent); stroke-width: 1.6; }
+  svg .box-flow { fill: var(--surface-2); stroke: var(--flow); stroke-width: 1.6; }
+  svg line, svg path.edge { stroke: var(--text-dim); stroke-width: 1.3; fill: none; }
+  svg path.edge-flow { stroke: var(--flow); stroke-width: 1.5; fill: none; }
+
+  .stack {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    margin-bottom: 6px;
+  }
+  .card h3 {
+    font-family: var(--sans);
+    font-size: 16px;
+    margin: 0 0 6px;
+  }
+  .card p {
+    font-size: 14.5px;
+    color: var(--text-dim);
+    margin: 0;
+  }
+  .card code {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--text);
+  }
+
+  ol.build {
+    list-style: none;
+    counter-reset: step;
+    padding: 0;
+    margin: 18px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  ol.build li {
+    counter-increment: step;
+    position: relative;
+    padding: 16px 0 16px 44px;
+    border-bottom: 1px solid var(--border);
+  }
+  ol.build li:last-child { border-bottom: none; }
+  ol.build li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--accent);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  ol.build h3 {
+    font-family: var(--sans);
+    font-size: 15.5px;
+    margin: 0 0 4px;
+  }
+  ol.build p {
+    font-size: 14.5px;
+    color: var(--text-dim);
+    margin: 0;
+    max-width: 60ch;
+  }
+  ol.build .risk {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--accent-ink);
+    margin-top: 6px;
+    display: inline-block;
+  }
+
+  .legend {
+    display: flex;
+    gap: 22px;
+    flex-wrap: wrap;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 14px;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 3px; display: inline-block; border-radius: 2px; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  @media (max-width: 640px) {
+    .wrap { padding-block: 32px 56px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="page">
+    <p class="eyebrow">System architecture &mdash; v0.1, decisions locked</p>
+    <h1>Donkeymind</h1>
+    <p class="sub">Point at a Python function; see who calls it, what it calls, and how the data threads through the chain &mdash; grounded in real static analysis, not a guessed diagram.</p>
+  </header>
+
+  <section id="decisions">
+    <h2><span class="n">00</span>Decisions locked for v0.1</h2>
+    <p class="lede">Four calls made before any code, and what each one trades away on purpose.</p>
+    <div class="stack">
+      <div class="card">
+        <div class="label">Scope</div>
+        <h3>Structure + data flow together</h3>
+        <p>Both layers ship in the same first version, not phased. Higher risk of a longer stretch before anything is demoable, in exchange for the differentiated feature existing from day one.</p>
+      </div>
+      <div class="card">
+        <div class="label">LSP client</div>
+        <h3>Hand-written, raw JSON-RPC</h3>
+        <p>No client library. You write the stdio framing and request/response handling directly &mdash; full visibility into what pyright is actually returning when something looks wrong.</p>
+      </div>
+      <div class="card">
+        <div class="label">Input</div>
+        <h3>Single file, exact file:line:col</h3>
+        <p>No symbol search, no workspace scan. You supply the position by hand. Whole-repo, search-by-name resolution is deferred past v0.1.</p>
+      </div>
+      <div class="card">
+        <div class="label">Persistence</div>
+        <h3>None &mdash; recompute every request</h3>
+        <p>No SQLite, no cache. Every call re-runs the LSP + AST passes from scratch. Simplest possible backend; revisit only once it's actually slow.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="request-path">
+    <h2><span class="n">01</span>Request path</h2>
+    <p class="lede">What happens between a click in the browser and a graph on screen. Everything left of the dashed line is deterministic &mdash; pyright and plain code, no model involved &mdash; so the graph itself can never be hallucinated.</p>
+
+    <figure>
+      <svg viewBox="0 0 880 400" role="img" aria-label="A user click in the React Flow browser UI sends a GET request to the FastAPI backend, which calls the LSP driver; the driver sends prepareCallHierarchy and incomingCalls or outgoingCalls over stdio JSON-RPC to a pyright subprocess reading the repo's Python files, while a separate AST and type-hover pass reads the same files to label each edge with argument and return types; both merge into a cached graph.json returned to the browser.">
+
+        <!-- lane labels -->
+        <text x="20" y="24" class="mono dim" font-size="11">BROWSER</text>
+        <text x="20" y="188" class="mono dim" font-size="11">BACKEND (FastAPI, Python)</text>
+        <text x="20" y="330" class="mono dim" font-size="11">LANGUAGE SERVER</text>
+
+        <!-- divider: deterministic zone -->
+        <line x1="0" y1="150" x2="880" y2="150" stroke="var(--border)" stroke-width="1" stroke-dasharray="2 5"/>
+
+        <!-- Browser box -->
+        <rect class="box-flow" x="20" y="40" width="180" height="70" rx="8"/>
+        <text x="110" y="68" text-anchor="middle" font-size="13.5" font-weight="600">React Flow canvas</text>
+        <text x="110" y="86" text-anchor="middle" class="mono dim" font-size="11">click: handleLogin()</text>
+
+        <!-- arrow down to backend -->
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--text-dim)"/>
+          </marker>
+          <marker id="arrow-flow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--flow)"/>
+          </marker>
+        </defs>
+
+        <path class="edge" marker-end="url(#arrow)" d="M110,110 L110,190"/>
+        <text x="122" y="150" font-size="11" class="mono dim">GET /graph?symbol=handleLogin&amp;hops=2</text>
+
+        <!-- Backend box -->
+        <rect class="box-accent" x="20" y="190" width="220" height="70" rx="8"/>
+        <text x="130" y="218" text-anchor="middle" font-size="13.5" font-weight="600">Orchestrator</text>
+        <text x="130" y="236" text-anchor="middle" class="mono dim" font-size="11">graph_service.py</text>
+
+        <!-- backend to LSP driver -->
+        <path class="edge" marker-end="url(#arrow)" d="M240,215 L340,215"/>
+        <text x="245" y="205" font-size="10.5" class="mono dim">invoke</text>
+        <rect class="box" x="340" y="190" width="180" height="70" rx="8"/>
+        <text x="430" y="218" text-anchor="middle" font-size="13.5" font-weight="600">LSP driver</text>
+        <text x="430" y="236" text-anchor="middle" class="mono dim" font-size="11">stdio JSON-RPC client</text>
+
+        <!-- backend to AST/type layer -->
+        <path class="edge-flow" marker-end="url(#arrow-flow)" d="M240,245 L340,290"/>
+        <text x="245" y="280" font-size="10.5" class="mono flow-text">invoke</text>
+        <rect class="box-flow" x="340" y="290" width="180" height="70" rx="8"/>
+        <text x="430" y="318" text-anchor="middle" font-size="13.5" font-weight="600">AST + type pass</text>
+        <text x="430" y="336" text-anchor="middle" class="mono dim" font-size="11">ast.walk + hover types</text>
+
+        <!-- LSP driver down to pyright -->
+        <path class="edge" marker-end="url(#arrow)" d="M430,260 L430,300"/>
+        <text x="440" y="282" font-size="10" class="mono dim">prepareCallHierarchy</text>
+
+        <!-- pyright subprocess -->
+        <rect class="box" x="560" y="190" width="220" height="170" rx="8"/>
+        <text x="670" y="216" text-anchor="middle" font-size="13.5" font-weight="600">pyright-langserver</text>
+        <text x="670" y="234" text-anchor="middle" class="mono dim" font-size="11">--stdio subprocess</text>
+        <line x1="580" y1="248" x2="760" y2="248" stroke="var(--border)" stroke-width="1"/>
+        <text x="670" y="270" text-anchor="middle" class="mono dim" font-size="10.5">incomingCalls(item)</text>
+        <text x="670" y="288" text-anchor="middle" class="mono dim" font-size="10.5">outgoingCalls(item)</text>
+        <text x="670" y="306" text-anchor="middle" class="mono dim" font-size="10.5">textDocument/hover</text>
+        <text x="670" y="330" text-anchor="middle" class="mono accent-text" font-size="11">reads repo/*.py</text>
+
+        <path class="edge" marker-end="url(#arrow)" d="M520,225 L560,225"/>
+        <path class="edge-flow" marker-end="url(#arrow-flow)" d="M520,320 L560,300"/>
+
+        <!-- merge back up -->
+        <path class="edge" d="M430,190 L430,150 L240,150" marker-end="url(#arrow)"/>
+        <path class="edge-flow" d="M430,290 L460,150 L240,150" marker-end="url(#arrow)"/>
+        <text x="270" y="142" font-size="10.5" class="mono dim">merge: structure + data-flow labels</text>
+
+        <!-- cache -->
+        <rect class="box" x="20" y="190" width="0" height="0" opacity="0"/>
+
+        <!-- return to browser -->
+        <path class="edge" marker-end="url(#arrow)" d="M130,190 L130,110"/>
+        <text x="140" y="150" font-size="11" class="mono dim">graph.json (recomputed, not cached)</text>
+
+      </svg>
+      <figcaption>One request, traced through every hop: the graph-structure path (grey) and the data-flow labeling path (green) run independently against the same source files, then merge before the response goes back.</figcaption>
+    </figure>
+
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--text-dim)"></span>call-hierarchy path (LSP)</span>
+      <span><span class="swatch" style="background:var(--flow)"></span>data-flow path (AST + type hover)</span>
+    </div>
+  </section>
+
+  <section id="edge-detail">
+    <h2><span class="n">02</span>How one edge gets its data-flow label</h2>
+    <p class="lede">The part that makes this different from a plain call graph. For every call site the AST pass finds, it reads the actual argument expression and the variable the return value is assigned to &mdash; then asks pyright for the inferred type at that exact position. If the same variable reappears as an argument two calls later, the edges are threaded, so a value's path is visible, not just the function path.</p>
+
+    <figure>
+      <svg viewBox="0 0 820 150" role="img" aria-label="Source line user = fetch_user(uid) then process(user): the AST pass extracts the call and its assigned variable, pyright hover resolves fetch_user's return type as User and process's parameter type as User, and because the same variable user is threaded from one call's output to the next call's input, the edge between fetch_user and process is labeled user: User.">
+        <rect class="box" x="10" y="16" width="330" height="44" rx="6"/>
+        <text x="24" y="43" class="mono" font-size="13">user = fetch_user(uid); process(user)</text>
+
+        <path class="edge" marker-end="url(#arrow)" d="M175,60 L175,90"/>
+        <rect class="box" x="20" y="92" width="300" height="46" rx="6"/>
+        <text x="170" y="112" text-anchor="middle" font-size="11.5">AST: assigned var <tspan class="mono">user</tspan>, reused as arg 2 calls later</text>
+        <text x="170" y="128" text-anchor="middle" class="mono dim" font-size="10.5">hover: fetch_user() -&gt; User</text>
+
+        <path class="edge-flow" marker-end="url(#arrow-flow)" d="M340,60 Q 560,10 660,55" />
+        <rect class="box-flow" x="560" y="55" width="220" height="70" rx="8"/>
+        <text x="670" y="82" text-anchor="middle" font-size="13" font-weight="600">fetch_user &rarr; process</text>
+        <text x="670" y="100" text-anchor="middle" class="mono flow-text" font-size="11">edge label: user: User</text>
+        <text x="670" y="116" text-anchor="middle" class="mono dim" font-size="10">rendered on the graph edge</text>
+      </svg>
+      <figcaption>Static, not runtime: the label says what type structurally flows where, not the value seen on any actual run.</figcaption>
+    </figure>
+  </section>
+
+  <section id="components">
+    <h2><span class="n">03</span>Components</h2>
+    <p class="lede">Four layers. Only one of them is a model call &mdash; kept out of the MVP entirely for now.</p>
+    <div class="stack">
+      <div class="card">
+        <div class="label">Layer 1 &middot; Structure</div>
+        <h3>LSP driver</h3>
+        <p>Owns the <code>pyright-langserver --stdio</code> subprocess and the JSON-RPC framing. Exposes <code>prepareCallHierarchy</code>, <code>incomingCalls</code>, <code>outgoingCalls</code> as plain async functions.</p>
+      </div>
+      <div class="card">
+        <div class="label">Layer 2 &middot; Data flow</div>
+        <h3>AST + type pass</h3>
+        <p>Walks each call site with Python's <code>ast</code> module, resolves argument/return types via <code>textDocument/hover</code>, threads reused variable names across hops.</p>
+      </div>
+      <div class="card">
+        <div class="label">Layer 3 &middot; Assembly</div>
+        <h3>Graph merge</h3>
+        <p>Merges both passes into <code>graph.json</code> in memory. No persistence in v0.1 &mdash; every request recomputes from scratch; add a cache only once that's actually slow.</p>
+      </div>
+      <div class="card">
+        <div class="label">Layer 4 &middot; Interface</div>
+        <h3>React Flow canvas</h3>
+        <p>Expandable node graph. Click a node &rarr; fetch its neighbors; edge labels show the threaded type; no LLM narration in v0.1.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="build-order">
+    <h2><span class="n">04</span>Build order</h2>
+    <p class="lede">Riskiest, least-glamorous piece first. If pyright can't produce a correct graph, nothing downstream matters.</p>
+    <ol class="build">
+      <li>
+        <h3>LSP driver, proven on one real symbol</h3>
+        <p>Spawn <code>pyright-langserver</code>, complete the initialize handshake, open one file, call <code>prepareCallHierarchy</code> at a known line:col, print the raw result.</p>
+        <span class="risk">de-risks: can we even talk to pyright reliably</span>
+      </li>
+      <li>
+        <h3>BFS expansion &rarr; graph.json</h3>
+        <p>Walk incoming/outgoing calls 2 hops out from that symbol, dedupe by (file, range), write the node/edge JSON. Validate it by hand against the real source.</p>
+        <span class="risk">de-risks: is the graph actually correct, not just non-empty</span>
+      </li>
+      <li>
+        <h3>AST + hover data-flow labels</h3>
+        <p>For each edge already in the graph, extract the call-site argument expressions and resolve their types. Thread repeated variable names across edges.</p>
+        <span class="risk">de-risks: the actual differentiator &mdash; everything above this is table stakes</span>
+      </li>
+      <li>
+        <h3>FastAPI wrapper</h3>
+        <p>One route, <code>GET /graph?file=&amp;line=&amp;col=</code>, that runs steps 1&ndash;3 fresh on every call and returns the JSON. No auth, no cache, no symbol search &mdash; one file, one exact position, one process.</p>
+      </li>
+      <li>
+        <h3>React Flow canvas</h3>
+        <p>Render the JSON, click-to-expand, edge labels visible. This is the first point the tool is usable by someone other than you.</p>
+      </li>
+    </ol>
+  </section>
+
+  <footer>
+    donkeymind &middot; python-only MVP &middot; no LLM in the critical path yet
+  </footer>
+
+</div>

@@ -1,0 +1,309 @@
+<title>Donkeymind Full Architecture</title>
+<style>
+  :root {
+    --bg: #faf8f4; --surface: #ffffff; --surface-2: #f2ede3; --border: #e2ddd0;
+    --text: #221f1a; --text-dim: #6b6355; --accent: #b5651d; --accent-ink: #7a4113;
+    --flow: #3d6b5c; --flow-ink: #294a3f; --agent: #6a4c93; --agent-ink: #4a3369;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --sans: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15130f; --surface: #1c1914; --surface-2: #232019; --border: #35301f;
+      --text: #f1ece0; --text-dim: #a89b83; --accent: #e0973f; --accent-ink: #f4c078;
+      --flow: #6fb89a; --flow-ink: #9fd6bd; --agent: #b39ddb; --agent-ink: #cbb8f0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15130f; --surface: #1c1914; --surface-2: #232019; --border: #35301f;
+    --text: #f1ece0; --text-dim: #a89b83; --accent: #e0973f; --accent-ink: #f4c078;
+    --flow: #6fb89a; --flow-ink: #9fd6bd; --agent: #b39ddb; --agent-ink: #cbb8f0;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: var(--serif); margin: 0; padding-inline: 16px; line-height: 1.55; }
+  .wrap { max-width: 980px; margin: 0 auto; padding-block: 48px 80px; }
+  header.page { margin-bottom: 40px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-ink); margin: 0 0 10px; }
+  h1 { font-family: var(--sans); font-weight: 800; font-size: clamp(28px, 5vw, 40px); letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance; }
+  .sub { color: var(--text-dim); font-size: 17px; max-width: 66ch; margin: 0; }
+  h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; margin: 0 0 4px; letter-spacing: -0.005em; }
+  h2 .n { font-family: var(--mono); color: var(--accent-ink); font-weight: 500; font-size: 15px; margin-right: 10px; }
+  section { margin-block: 52px; }
+  .lede { color: var(--text-dim); max-width: 70ch; margin: 6px 0 20px; }
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  figcaption { font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); margin-top: 12px; text-align: center; }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--text); font-family: var(--sans); }
+  svg .mono { font-family: var(--mono); }
+  svg .dim { fill: var(--text-dim); }
+  svg .accent-text { fill: var(--accent-ink); }
+  svg .flow-text { fill: var(--flow-ink); }
+  svg .agent-text { fill: var(--agent-ink); }
+  svg .box { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.3; }
+  svg .box-accent { fill: var(--surface-2); stroke: var(--accent); stroke-width: 1.6; }
+  svg .box-flow { fill: var(--surface-2); stroke: var(--flow); stroke-width: 1.6; }
+  svg .box-agent { fill: var(--surface-2); stroke: var(--agent); stroke-width: 1.6; }
+  svg .edge { stroke: var(--text-dim); stroke-width: 1.3; fill: none; }
+  svg .edge-flow { stroke: var(--flow); stroke-width: 1.4; fill: none; }
+  svg .edge-agent { stroke: var(--agent); stroke-width: 1.4; fill: none; }
+  svg .lane { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 5; }
+
+  .stack { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-top: 18px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .card.agent { border-color: var(--agent); }
+  .card .label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 6px; }
+  .card.agent .label { color: var(--agent-ink); }
+  .card h3 { font-family: var(--sans); font-size: 16px; margin: 0 0 6px; }
+  .card p { font-size: 14.5px; color: var(--text-dim); margin: 0; }
+  .card code { font-family: var(--mono); font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--sans); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; }
+  td.tag { font-family: var(--mono); font-size: 12.5px; color: var(--accent-ink); white-space: nowrap; }
+
+  ul.decisions { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-direction: column; gap: 10px; }
+  ul.decisions li {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 13px 16px; font-size: 14.5px;
+    display: flex; gap: 10px;
+  }
+  ul.decisions .qn { font-family: var(--mono); color: var(--accent-ink); flex-shrink: 0; }
+
+  .legend { display: flex; gap: 22px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--text-dim); margin-top: 14px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 3px; display: inline-block; border-radius: 2px; }
+
+  footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  @media (max-width: 640px) { .wrap { padding-block: 32px 56px; } }
+</style>
+
+<div class="wrap">
+
+  <header class="page">
+    <p class="eyebrow">Full system architecture &mdash; all decisions resolved</p>
+    <h1>Donkeymind</h1>
+    <p class="sub">The whole product: every agent, the full data pipeline, static and dynamic analysis, persistent storage. This is what we're building toward &mdash; day-by-day sequencing comes after the decisions below are made.</p>
+  </header>
+
+  <section id="full-system">
+    <h2><span class="n">01</span>Full system diagram</h2>
+    <p class="lede">Five swimlanes, top to bottom: what you interact with, what coordinates, the agents that do reasoning, the graph that's built once and read many times, and the two analysis engines that build it. Grey = deterministic. Purple = a real agent (model call). Green = the data-flow-specific path.</p>
+
+    <figure>
+      <svg viewBox="0 0 940 760" role="img" aria-label="Full architecture: the browser interface sends questions to an Orchestrator agent, which invokes four specialist agents (Narrator, Path-Explainer, Flow-Tracer, Drift-Checker) as needed. All agents read from a persistent graph store. The graph store is built and kept current by two analysis engines: a static engine (per-language LSP drivers plus an AST and type pass) and a dynamic engine (runtime tracer), both reading the actual repository and, for the dynamic engine, a running instance of the app.">
+
+        <text x="16" y="24" class="mono dim" font-size="11">INTERFACE</text>
+        <text x="16" y="122" class="mono dim" font-size="11">ORCHESTRATION</text>
+        <text x="16" y="230" class="mono dim" font-size="11">AGENT LAYER (reasoning)</text>
+        <text x="16" y="430" class="mono dim" font-size="11">GRAPH STORE (persistent)</text>
+        <text x="16" y="520" class="mono dim" font-size="11">ANALYSIS ENGINES (deterministic)</text>
+        <text x="16" y="700" class="mono dim" font-size="11">SOURCE</text>
+
+        <line x1="0" y1="95" x2="940" y2="95" class="lane"/>
+        <line x1="0" y1="205" x2="940" y2="205" class="lane"/>
+        <line x1="0" y1="400" x2="940" y2="400" class="lane"/>
+        <line x1="0" y1="495" x2="940" y2="495" class="lane"/>
+        <line x1="0" y1="670" x2="940" y2="670" class="lane"/>
+
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-dim)"/></marker>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--flow)"/></marker>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--agent)"/></marker>
+        </defs>
+
+        <!-- Interface -->
+        <rect class="box" x="300" y="30" width="340" height="55" rx="8"/>
+        <text x="470" y="53" text-anchor="middle" font-size="13.5" font-weight="600">React Flow canvas + question box</text>
+        <text x="470" y="70" text-anchor="middle" class="mono dim" font-size="11">"where does auth happen?" / click node</text>
+
+        <path class="edge" marker-end="url(#a1)" d="M470,85 L470,115"/>
+
+        <!-- Orchestrator -->
+        <rect class="box-agent" x="350" y="118" width="240" height="60" rx="8"/>
+        <text x="470" y="145" text-anchor="middle" font-size="13.5" font-weight="600">Orchestrator (agent)</text>
+        <text x="470" y="163" text-anchor="middle" class="mono agent-text" font-size="11">picks symbol, hop depth, which subagent</text>
+
+        <!-- to 4 agents -->
+        <path class="edge-agent" marker-end="url(#a3)" d="M400,178 L120,215"/>
+        <path class="edge-agent" marker-end="url(#a3)" d="M440,178 L340,215"/>
+        <path class="edge-agent" marker-end="url(#a3)" d="M500,178 L590,215"/>
+        <path class="edge-agent" marker-end="url(#a3)" d="M550,178 L800,215"/>
+
+        <!-- 4 agent boxes -->
+        <rect class="box-agent" x="20" y="218" width="200" height="80" rx="8"/>
+        <text x="120" y="246" text-anchor="middle" font-size="13" font-weight="600">Narrator</text>
+        <text x="120" y="263" text-anchor="middle" class="mono dim" font-size="10.5">1 node &rarr; what/why,</text>
+        <text x="120" y="277" text-anchor="middle" class="mono dim" font-size="10.5">grounded in source</text>
+
+        <rect class="box-agent" x="240" y="218" width="200" height="80" rx="8"/>
+        <text x="340" y="246" text-anchor="middle" font-size="13" font-weight="600">Path-Explainer</text>
+        <text x="340" y="263" text-anchor="middle" class="mono dim" font-size="10.5">full chain A&rarr;B&rarr;C,</text>
+        <text x="340" y="277" text-anchor="middle" class="mono dim" font-size="10.5">narrated as one story</text>
+
+        <rect class="box-agent" x="490" y="218" width="200" height="80" rx="8"/>
+        <text x="590" y="246" text-anchor="middle" font-size="13" font-weight="600">Flow-Tracer</text>
+        <text x="590" y="263" text-anchor="middle" class="mono dim" font-size="10.5">reconciles static graph</text>
+        <text x="590" y="277" text-anchor="middle" class="mono dim" font-size="10.5">against a real runtime trace</text>
+
+        <rect class="box-agent" x="700" y="218" width="200" height="80" rx="8"/>
+        <text x="800" y="246" text-anchor="middle" font-size="13" font-weight="600">Drift-Checker</text>
+        <text x="800" y="263" text-anchor="middle" class="mono dim" font-size="10.5">flags docstrings/comments</text>
+        <text x="800" y="277" text-anchor="middle" class="mono dim" font-size="10.5">that contradict the graph</text>
+
+        <!-- agents read graph store -->
+        <path class="edge" marker-end="url(#a1)" d="M120,298 L120,410"/>
+        <path class="edge" marker-end="url(#a1)" d="M340,298 L400,410"/>
+        <path class="edge" marker-end="url(#a1)" d="M590,298 L520,410"/>
+        <path class="edge" marker-end="url(#a1)" d="M800,298 L640,410"/>
+
+        <!-- Graph store -->
+        <rect class="box-accent" x="270" y="410" width="400" height="70" rx="8"/>
+        <text x="470" y="438" text-anchor="middle" font-size="13.5" font-weight="600">Graph store</text>
+        <text x="470" y="456" text-anchor="middle" class="mono dim" font-size="11">nodes + edges + type labels, keyed by repo/commit</text>
+
+        <!-- from analysis engines up to graph store -->
+        <path class="edge" marker-end="url(#a1)" d="M280,495 L370,480"/>
+        <path class="edge-flow" marker-end="url(#a2)" d="M470,495 L470,480"/>
+        <path class="edge" marker-end="url(#a1)" d="M760,495 L570,480"/>
+
+        <!-- static engine box -->
+        <rect class="box" x="60" y="498" width="380" height="90" rx="8"/>
+        <text x="250" y="524" text-anchor="middle" font-size="13" font-weight="600">Static engine</text>
+        <text x="250" y="542" text-anchor="middle" class="mono dim" font-size="10.5">per-language LSP driver (pyright first,</text>
+        <text x="250" y="556" text-anchor="middle" class="mono dim" font-size="10.5">tsserver / gopls / rust-analyzer later)</text>
+        <text x="250" y="574" text-anchor="middle" class="mono flow-text" font-size="10.5">+ AST &amp; hover-type data-flow pass</text>
+
+        <!-- dynamic engine box -->
+        <rect class="box" x="560" y="498" width="320" height="90" rx="8"/>
+        <text x="720" y="524" text-anchor="middle" font-size="13" font-weight="600">Dynamic engine</text>
+        <text x="720" y="542" text-anchor="middle" class="mono dim" font-size="10.5">runtime tracer (sys.settrace /</text>
+        <text x="720" y="556" text-anchor="middle" class="mono dim" font-size="10.5">OpenTelemetry) for one concrete path</text>
+        <text x="720" y="574" text-anchor="middle" class="mono dim" font-size="10.5">only &mdash; not the whole repo</text>
+
+        <!-- to source -->
+        <path class="edge" marker-end="url(#a1)" d="M250,588 L250,660"/>
+        <path class="edge" marker-end="url(#a1)" d="M720,588 L720,660"/>
+
+        <rect class="box" x="60" y="662" width="380" height="55" rx="8"/>
+        <text x="250" y="685" text-anchor="middle" font-size="12.5">repository source files</text>
+        <text x="250" y="702" text-anchor="middle" class="mono dim" font-size="10">(*.py, *.ts, *.go, ...)</text>
+
+        <rect class="box" x="560" y="662" width="320" height="55" rx="8"/>
+        <text x="720" y="685" text-anchor="middle" font-size="12.5">running instance / captured trace</text>
+        <text x="720" y="702" text-anchor="middle" class="mono dim" font-size="10">for the one entry point being traced</text>
+
+      </svg>
+      <figcaption>Everything below the graph store is deterministic and cacheable. Everything in the agent layer reads that graph &mdash; none of the four specialist agents talk to each other directly, only through the Orchestrator.</figcaption>
+    </figure>
+
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--text-dim)"></span>deterministic (structure)</span>
+      <span><span class="swatch" style="background:var(--flow)"></span>data-flow specific</span>
+      <span><span class="swatch" style="background:var(--agent)"></span>agent (model call)</span>
+    </div>
+  </section>
+
+  <section id="agent-layer">
+    <h2><span class="n">02</span>Agent layer detail</h2>
+    <p class="lede">Only the Orchestrator is a real multi-step agent &mdash; it decides which of the other four to call and when to stop. The other four are single, tightly-grounded calls; calling them "agents" is convenient but each is really one typed function that happens to invoke a model once (Flow-Tracer is the exception: run trace &rarr; interpret &rarr; reconcile is inherently two steps).</p>
+    <div class="stack">
+      <div class="card agent">
+        <div class="label">Lead agent</div>
+        <h3>Orchestrator</h3>
+        <p>Owns the tool-calling loop. Resolves the user's question to a starting symbol, decides hop depth, picks which specialist(s) to invoke, and when it has enough to answer. Built on the <code>Claude Agent SDK</code> &mdash; no hand-rolled loop, kept cost-minimal.</p>
+      </div>
+      <div class="card agent">
+        <div class="label">Specialist</div>
+        <h3>Narrator</h3>
+        <p>One function's real source in, one/three-sentence explanation out. No graph traversal of its own.</p>
+      </div>
+      <div class="card agent">
+        <div class="label">Specialist</div>
+        <h3>Path-Explainer</h3>
+        <p>A resolved multi-hop path in, a narrated walkthrough out. Reasons across several nodes' purposes together.</p>
+      </div>
+      <div class="card agent">
+        <div class="label">Specialist &middot; 2 steps</div>
+        <h3>Flow-Tracer</h3>
+        <p>Runs or replays a trace for one entry point, then reconciles it against the static graph &mdash; the only place dynamic dispatch and monkey-patching become visible.</p>
+      </div>
+      <div class="card agent">
+        <div class="label">Specialist &middot; background</div>
+        <h3>Drift-Checker</h3>
+        <p>Runs opportunistically over nodes that have existing docstrings/comments, flags where they contradict what the graph shows.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="data-model">
+    <h2><span class="n">03</span>Data model</h2>
+    <p class="lede">What actually lives in the graph store &mdash; the contract every agent and the UI read from.</p>
+    <table>
+      <tr><th>Field</th><th>On</th><th>Populated by</th></tr>
+      <tr><td class="tag">id, name, kind</td><td>node</td><td>static engine (LSP)</td></tr>
+      <tr><td class="tag">file, range, language</td><td>node</td><td>static engine (LSP)</td></tr>
+      <tr><td class="tag">from, to, direction</td><td>edge</td><td>static engine (LSP)</td></tr>
+      <tr><td class="tag">args[], returns</td><td>edge</td><td>data-flow pass (AST + hover)</td></tr>
+      <tr><td class="tag">runtime_confirmed</td><td>edge</td><td>Flow-Tracer, only when a dynamic trace covered it</td></tr>
+      <tr><td class="tag">narration (cached)</td><td>node</td><td>Narrator, on first request</td></tr>
+      <tr><td class="tag">drift_flags[]</td><td>node</td><td>Drift-Checker, background job</td></tr>
+    </table>
+  </section>
+
+  <section id="language-rollout">
+    <h2><span class="n">04</span>Language rollout</h2>
+    <p class="lede">The static engine is built against the LSP protocol, not against Python specifically &mdash; call hierarchy is a standard LSP capability every serious language server implements. Python first because it's your strength and it's what proves the pattern; each language after that is "swap the language server," not "rewrite the engine."</p>
+    <table>
+      <tr><th>Language</th><th>Server</th><th>Order</th></tr>
+      <tr><td class="tag">Python</td><td>pyright</td><td>first &mdash; proves the pipeline</td></tr>
+      <tr><td class="tag">TypeScript/JS</td><td>typescript-language-server</td><td>second &mdash; proves the abstraction generalizes (also the language from the interview story)</td></tr>
+      <tr><td class="tag">Go</td><td>gopls</td><td>third</td></tr>
+      <tr><td class="tag">Rust</td><td>rust-analyzer</td><td>fourth</td></tr>
+    </table>
+  </section>
+
+  <section id="decisions">
+    <h2><span class="n">05</span>Decisions &mdash; resolved</h2>
+    <p class="lede">Locked. This is what the rest of the docs (MVP plan, build flow) should be read against from now on.</p>
+    <table>
+      <tr><th>#</th><th>Decision</th><th>Chosen</th><th>Why</th></tr>
+      <tr><td class="tag">D1</td><td>Graph store</td><td>SQLite, embedded</td><td>Single user, one machine &mdash; smallest step up from no persistence at all.</td></tr>
+      <tr><td class="tag">D2</td><td>Orchestrator framework</td><td>Claude Agent SDK</td><td>Cost kept minimal &mdash; no separate framework spend, loop plumbing already solved.</td></tr>
+      <tr><td class="tag">D3</td><td>Dynamic tracing</td><td>Python-specific (<code>sys.settrace</code>)</td><td>Prove the riskiest, least-proven component once before generalizing to other languages.</td></tr>
+      <tr><td class="tag">D4</td><td>Users</td><td>Single-user, local</td><td>No auth/tenancy needed for now &mdash; ship the core idea before paying for hosting.</td></tr>
+      <tr><td class="tag">D5</td><td>MCP server</td><td>Yes, added now</td><td>Exposes the graph store as tools other agents (e.g. Claude Code) can call &mdash; not deferred.</td></tr>
+    </table>
+  </section>
+
+  <section id="mcp">
+    <h2><span class="n">06</span>MCP interface</h2>
+    <p class="lede">A thin adapter over the same graph-store query layer the FastAPI backend already uses &mdash; not a second engine, just a second way in. This is what turns Donkeymind from an app you open into a tool Claude Code (or any MCP client) can call mid-task.</p>
+    <figure>
+      <svg viewBox="0 0 820 190" role="img" aria-label="An MCP client such as Claude Code sends a tool call like who_calls or trace_path to the Donkeymind MCP server, which queries the same graph store the web app reads from, and returns structured call-hierarchy and data-flow results.">
+        <rect class="box" x="20" y="60" width="220" height="70" rx="8"/>
+        <text x="130" y="88" text-anchor="middle" font-size="13" font-weight="600">MCP client</text>
+        <text x="130" y="106" text-anchor="middle" class="mono dim" font-size="10.5">e.g. Claude Code, mid-task</text>
+
+        <path class="edge" marker-end="url(#a1)" d="M240,95 L340,95"/>
+        <text x="245" y="85" font-size="10.5" class="mono dim">tool: who_calls / trace_path</text>
+
+        <rect class="box-accent" x="340" y="60" width="200" height="70" rx="8"/>
+        <text x="440" y="88" text-anchor="middle" font-size="13" font-weight="600">Donkeymind MCP server</text>
+        <text x="440" y="106" text-anchor="middle" class="mono dim" font-size="10.5">thin adapter, no new logic</text>
+
+        <path class="edge" marker-end="url(#a1)" d="M540,95 L640,95"/>
+
+        <rect class="box" x="640" y="60" width="160" height="70" rx="8"/>
+        <text x="720" y="88" text-anchor="middle" font-size="13" font-weight="600">Graph store</text>
+        <text x="720" y="106" text-anchor="middle" class="mono dim" font-size="10.5">SQLite</text>
+
+        <text x="440" y="160" text-anchor="middle" class="mono dim" font-size="10.5">same query layer the FastAPI backend and React Flow canvas already use</text>
+      </svg>
+      <figcaption>The MCP server and the web app are two front doors onto one graph store &mdash; neither owns the data.</figcaption>
+    </figure>
+  </section>
+
+  <footer>donkeymind &middot; full architecture &middot; all decisions resolved &mdash; next: day-by-day build plan</footer>
+
+</div>

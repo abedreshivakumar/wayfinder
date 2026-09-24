@@ -1,0 +1,318 @@
+<title>Donkeymind Low-Level Design</title>
+<style>
+  :root {
+    --bg: #faf8f4; --surface: #ffffff; --surface-2: #f2ede3; --border: #e2ddd0;
+    --text: #221f1a; --text-dim: #6b6355; --accent: #b5651d; --accent-ink: #7a4113;
+    --flow: #3d6b5c; --flow-ink: #294a3f; --agent: #6a4c93; --agent-ink: #4a3369;
+    --code-bg: #1e1b17; --code-text: #e8e2d4; --code-dim: #8f8674; --code-kw: #e0973f; --code-str: #8fbfa0;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --sans: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15130f; --surface: #1c1914; --surface-2: #232019; --border: #35301f;
+      --text: #f1ece0; --text-dim: #a89b83; --accent: #e0973f; --accent-ink: #f4c078;
+      --flow: #6fb89a; --flow-ink: #9fd6bd; --agent: #b39ddb; --agent-ink: #cbb8f0;
+      --code-bg: #0f0d0a; --code-text: #e8e2d4; --code-dim: #766e5c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15130f; --surface: #1c1914; --surface-2: #232019; --border: #35301f;
+    --text: #f1ece0; --text-dim: #a89b83; --accent: #e0973f; --accent-ink: #f4c078;
+    --flow: #6fb89a; --flow-ink: #9fd6bd; --agent: #b39ddb; --agent-ink: #cbb8f0;
+    --code-bg: #0f0d0a; --code-text: #e8e2d4; --code-dim: #766e5c;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: var(--serif); margin: 0; padding-inline: 16px; line-height: 1.55; }
+  .wrap { max-width: 980px; margin: 0 auto; padding-block: 48px 90px; }
+  header.page { margin-bottom: 36px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-ink); margin: 0 0 10px; }
+  h1 { font-family: var(--sans); font-weight: 800; font-size: clamp(28px, 5vw, 38px); letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance; }
+  .sub { color: var(--text-dim); font-size: 16.5px; max-width: 68ch; margin: 0; }
+
+  nav.toc {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px;
+  }
+  nav.toc a {
+    font-family: var(--mono); font-size: 12px; color: var(--accent-ink); text-decoration: none;
+    border: 1px solid var(--border); border-radius: 20px; padding: 6px 13px; background: var(--surface);
+  }
+
+  .part { margin-block: 56px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .part-head { display: flex; align-items: baseline; gap: 14px; margin: 26px 0 6px; flex-wrap: wrap; }
+  .part-num {
+    font-family: var(--mono); font-size: 13px; color: var(--bg); background: var(--accent);
+    border-radius: 6px; padding: 3px 10px; flex-shrink: 0;
+  }
+  h2 { font-family: var(--sans); font-weight: 700; font-size: 23px; margin: 0; letter-spacing: -0.005em; }
+  .owns { font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); margin: 0 0 18px; }
+  h3 { font-family: var(--sans); font-weight: 700; font-size: 15.5px; margin: 26px 0 8px; color: var(--text); }
+  .lede { color: var(--text-dim); max-width: 70ch; margin: 6px 0 16px; font-size: 15px; }
+
+  pre {
+    background: var(--code-bg); color: var(--code-text); border-radius: 8px; padding: 16px 18px;
+    overflow-x: auto; font-family: var(--mono); font-size: 12.8px; line-height: 1.6; margin: 10px 0 0;
+    border: 1px solid var(--border);
+  }
+  pre .c { color: var(--code-dim); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13.8px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--sans); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; }
+  td code, p code, li code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  td.tag { font-family: var(--mono); font-size: 12px; color: var(--accent-ink); white-space: nowrap; }
+
+  .files { list-style: none; padding: 0; margin: 10px 0 0; font-family: var(--mono); font-size: 13px; }
+  .files li { padding: 3px 0; color: var(--text-dim); }
+  .files b { color: var(--text); font-weight: 500; }
+
+  .contract {
+    background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--flow);
+    border-radius: 6px; padding: 12px 16px; margin-top: 14px; font-size: 14px;
+  }
+  .contract .label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--flow-ink); margin-bottom: 4px; }
+
+  .risk {
+    background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: 6px; padding: 12px 16px; margin-top: 14px; font-size: 14px;
+  }
+  .risk .label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent-ink); margin-bottom: 4px; }
+
+  footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  @media (max-width: 640px) { .wrap { padding-block: 32px 60px; } pre { font-size: 11.8px; } }
+</style>
+
+<div class="wrap">
+
+  <header class="page">
+    <p class="eyebrow">Low-level design &mdash; 5 parts, resolved architecture</p>
+    <h1>Donkeymind LLD</h1>
+    <p class="sub">The full architecture split into five independently buildable parts. Each has its own file layout, data contracts, and function signatures &mdash; the level of detail you should be able to code straight from.</p>
+    <nav class="toc">
+      <a href="#p1">01 Static Engine</a>
+      <a href="#p2">02 Graph Store</a>
+      <a href="#p3">03 Agent Layer</a>
+      <a href="#p4">04 API + MCP</a>
+      <a href="#p5">05 Frontend</a>
+    </nav>
+  </header>
+
+  <div class="part" id="p1">
+    <div class="part-head"><span class="part-num">Part 1</span><h2>Static Engine</h2></div>
+    <p class="owns">owns: talking to pyright, building the raw call graph, labeling edges with data flow</p>
+    <p class="lede">The deterministic core. Everything else in the system depends on this being correct &mdash; it's the only part with zero tolerance for "close enough."</p>
+
+    <h3>File layout</h3>
+    <ul class="files">
+      <li><b>lsp/client.py</b> &mdash; raw JSON-RPC over stdio, message framing</li>
+      <li><b>lsp/pyright_driver.py</b> &mdash; handshake + typed call-hierarchy/hover methods</li>
+      <li><b>lsp/position.py</b> &mdash; AST &harr; LSP position conversion (the one place this math lives)</li>
+      <li><b>graph/builder.py</b> &mdash; BFS expansion into a Graph object</li>
+      <li><b>dataflow/ast_pass.py</b> &mdash; call-site + assignment extraction via <code>ast.NodeVisitor</code></li>
+      <li><b>dataflow/type_resolver.py</b> &mdash; hover request &rarr; parsed type string</li>
+      <li><b>dataflow/thread.py</b> &mdash; links a reused variable name across edges</li>
+    </ul>
+
+    <h3>Key signatures</h3>
+    <pre>class LSPClient:
+    def start(self, command: list[str]) -> None: <span class="c"># spawn subprocess</span>
+    def request(self, method: str, params: dict) -> dict: <span class="c"># blocking, framed</span>
+    def notify(self, method: str, params: dict) -> None: ...
+    def shutdown(self) -> None: ...
+
+class PyrightDriver:
+    def __init__(self, client: LSPClient, repo_root: str): ...
+    def initialize(self) -> None: <span class="c"># initialize -&gt; initialized handshake</span>
+    def open_file(self, file: str) -> None: <span class="c"># textDocument/didOpen</span>
+    def prepare_call_hierarchy(self, file: str, line: int, col: int) -> CallHierarchyItem: ...
+    def incoming_calls(self, item: CallHierarchyItem) -> list[IncomingCall]: ...
+    def outgoing_calls(self, item: CallHierarchyItem) -> list[OutgoingCall]: ...
+    def hover(self, file: str, line: int, col: int) -> str | None: <span class="c"># raw markdown</span>
+
+def build_call_graph(driver: PyrightDriver, start: Position, hops: int = 2) -> Graph: ...
+
+class CallSiteVisitor(ast.NodeVisitor):
+    def visit_Call(self, node: ast.Call) -> None: <span class="c"># records CallSite</span>
+    def visit_Assign(self, node: ast.Assign) -> None: <span class="c"># tracks assigned var for prior call</span>
+
+def resolve_type(driver: PyrightDriver, file: str, line: int, col: int) -> str | None: ...
+def thread_variables(sites: list[CallSite]) -> dict[str, list[CallSite]]: ...</pre>
+
+    <div class="contract">
+      <div class="label">Output contract &rarr; Part 2</div>
+      One <code>Graph</code> object: <code>{nodes: list[Node], edges: list[Edge]}</code>, matching the data-model fields already locked (id/name/kind/file/range/language on nodes; from/to/direction/args/returns on edges). Part 2 never talks to pyright &mdash; it only ever receives this object.
+    </div>
+    <div class="risk">
+      <div class="label">Known limitation, by design</div>
+      Cannot see dynamic dispatch, monkey-patching, or callback registries &mdash; that gap is intentionally Part 3's Flow-Tracer's job, not this part's. Don't try to patch this in here.
+    </div>
+  </div>
+
+  <div class="part" id="p2">
+    <div class="part-head"><span class="part-num">Part 2</span><h2>Graph Store</h2></div>
+    <p class="owns">owns: persistence, the one query interface everything else reads through</p>
+    <p class="lede">SQLite (D1). This is the single choke point both the API and the MCP server query &mdash; neither owns the data, both go through <code>GraphRepository</code>.</p>
+
+    <h3>Schema</h3>
+    <pre>CREATE TABLE nodes (
+  id            TEXT PRIMARY KEY,
+  repo          TEXT NOT NULL,
+  commit_sha    TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  kind          TEXT NOT NULL,          <span class="c">-- function | method | class</span>
+  file          TEXT NOT NULL,
+  start_line    INTEGER, start_col INTEGER,
+  end_line      INTEGER, end_col INTEGER,
+  language      TEXT NOT NULL,
+  narration     TEXT,                   <span class="c">-- NULL until Narrator runs</span>
+  narrated_at   TIMESTAMP
+);
+
+CREATE TABLE edges (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  repo              TEXT NOT NULL,
+  commit_sha        TEXT NOT NULL,
+  from_id           TEXT NOT NULL REFERENCES nodes(id),
+  to_id             TEXT NOT NULL REFERENCES nodes(id),
+  direction         TEXT NOT NULL,      <span class="c">-- incoming | outgoing</span>
+  args_json         TEXT,               <span class="c">-- [{name, type}]</span>
+  returns_json      TEXT,               <span class="c">-- {var, type}</span>
+  runtime_confirmed BOOLEAN DEFAULT 0
+);
+
+CREATE TABLE drift_flags (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  node_id     TEXT NOT NULL REFERENCES nodes(id),
+  detail      TEXT NOT NULL,
+  detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_edges_from ON edges(from_id);
+CREATE INDEX idx_edges_to   ON edges(to_id);</pre>
+
+    <h3>Key signatures</h3>
+    <pre>class GraphRepository:
+    def __init__(self, db_path: str): ...
+    def upsert_graph(self, graph: Graph, repo: str, commit: str) -> None: ...
+    def get_neighbors(self, node_id: str, hops: int, direction: str | None = None) -> Graph: ...
+    def get_node(self, node_id: str) -> Node | None: ...
+    def set_narration(self, node_id: str, text: str) -> None: ...
+    def add_drift_flag(self, node_id: str, detail: str) -> None: ...
+    def mark_runtime_confirmed(self, from_id: str, to_id: str) -> None: ...</pre>
+
+    <div class="contract">
+      <div class="label">Interface contract</div>
+      <code>GraphRepository</code> is the <em>only</em> way anything (API, MCP server, background Drift-Checker job) touches SQLite. No other module opens the <code>.db</code> file directly &mdash; this is what keeps the MCP server a thin adapter instead of a second implementation of graph queries.
+    </div>
+  </div>
+
+  <div class="part" id="p3">
+    <div class="part-head"><span class="part-num">Part 3</span><h2>Agent Layer</h2></div>
+    <p class="owns">owns: everything that calls a model &mdash; the Orchestrator plus four specialists</p>
+    <p class="lede">Built on the Claude Agent SDK (D2). Every specialist is grounded on real source text pulled from <code>GraphRepository</code> &mdash; none of them are ever handed "the whole repo" or asked to reason from memory.</p>
+
+    <h3>File layout</h3>
+    <ul class="files">
+      <li><b>agents/orchestrator.py</b> &mdash; the one true multi-step agent, tool-calling loop via Claude Agent SDK</li>
+      <li><b>agents/narrator.py</b> &mdash; one node in, one explanation out</li>
+      <li><b>agents/path_explainer.py</b> &mdash; a resolved path in, one narrated story out</li>
+      <li><b>agents/flow_tracer.py</b> &mdash; run trace (deterministic) + reconcile (model)</li>
+      <li><b>agents/drift_checker.py</b> &mdash; background job, one node at a time</li>
+    </ul>
+
+    <h3>Key signatures</h3>
+    <pre>class Orchestrator:
+    <span class="c"># registered tools, exposed to the SDK's tool-calling loop:</span>
+    def resolve_symbol(self, query: str) -> Position: ...
+    def get_graph(self, position: Position, hops: int) -> Graph: ...
+    def call_narrator(self, node_id: str) -> str: ...
+    def call_path_explainer(self, node_ids: list[str]) -> str: ...
+    def call_flow_tracer(self, entry_point: str) -> Graph: ...
+    def answer(self, question: str) -> str: <span class="c"># entry point, drives the loop</span>
+
+def narrate_node(node: Node, source: str) -> str: <span class="c"># single grounded call</span>
+def explain_path(nodes: list[Node], edges: list[Edge]) -> str: ...
+
+class FlowTracer:
+    def run_trace(self, entry_point: str, sample_input: dict) -> RawTrace: <span class="c"># sys.settrace, deterministic</span>
+    def reconcile(self, trace: RawTrace, graph: Graph) -> list[Edge]: <span class="c"># model step</span>
+
+def check_node(node: Node, docstring: str, graph: Graph) -> list[DriftFlag]: ...</pre>
+
+    <div class="contract">
+      <div class="label">Grounding rule, applies to all five</div>
+      Every prompt in this layer includes the actual source snippet or graph slice as context &mdash; never a bare question with no data attached. This is the difference between "narration" and "hallucination" and it's non-negotiable across every agent here.
+    </div>
+  </div>
+
+  <div class="part" id="p4">
+    <div class="part-head"><span class="part-num">Part 4</span><h2>API + MCP Interface</h2></div>
+    <p class="owns">owns: the two front doors onto the graph store &mdash; HTTP for the web app, MCP for other agents</p>
+    <p class="lede">Both are thin. Neither contains graph logic of its own &mdash; that all lives in Parts 1&ndash;3, reached through <code>GraphRepository</code>.</p>
+
+    <h3>File layout</h3>
+    <ul class="files">
+      <li><b>api/main.py</b> &mdash; FastAPI app, lifespan-managed PyrightDriver</li>
+      <li><b>api/routes.py</b> &mdash; the three HTTP routes</li>
+      <li><b>mcp/server.py</b> &mdash; MCP tool definitions, in-process calls to the same repository/agents</li>
+    </ul>
+
+    <h3>HTTP routes</h3>
+    <table>
+      <tr><th>Route</th><th>Behavior</th></tr>
+      <tr><td class="tag">GET /graph</td><td><code>?file=&amp;line=&amp;col=&amp;hops=2</code> &rarr; runs Part 1 fresh (no cache, per D-locked MVP scope), returns Graph JSON</td></tr>
+      <tr><td class="tag">POST /narrate</td><td><code>{node_id}</code> &rarr; cached narration if present, else calls Narrator and stores it</td></tr>
+      <tr><td class="tag">POST /ask</td><td><code>{question}</code> &rarr; hands off to <code>Orchestrator.answer()</code>, streamed response</td></tr>
+    </table>
+
+    <h3>MCP tools exposed</h3>
+    <table>
+      <tr><th>Tool</th><th>Maps to</th></tr>
+      <tr><td class="tag">who_calls</td><td><code>GraphRepository.get_neighbors(direction="incoming")</code></td></tr>
+      <tr><td class="tag">what_does_this_call</td><td><code>GraphRepository.get_neighbors(direction="outgoing")</code></td></tr>
+      <tr><td class="tag">explain_function</td><td><code>narrate_node(...)</code></td></tr>
+      <tr><td class="tag">trace_path</td><td><code>Orchestrator.call_path_explainer(...)</code></td></tr>
+    </table>
+
+    <div class="contract">
+      <div class="label">Lifecycle detail</div>
+      The pyright subprocess is started once in FastAPI's <code>lifespan</code>, not per request &mdash; both the HTTP route and the MCP server share the same running <code>PyrightDriver</code> instance, never spawn their own.
+    </div>
+  </div>
+
+  <div class="part" id="p5">
+    <div class="part-head"><span class="part-num">Part 5</span><h2>Frontend</h2></div>
+    <p class="owns">owns: the only part a human looks at</p>
+    <p class="lede">React Flow. No graph logic here either &mdash; it renders whatever <code>/graph</code> and <code>/ask</code> return.</p>
+
+    <h3>File layout</h3>
+    <ul class="files">
+      <li><b>src/App.tsx</b> &mdash; top-level state: current position, graph data, question box</li>
+      <li><b>src/hooks/useGraph.ts</b> &mdash; fetches <code>/graph</code>, re-fetches on node click</li>
+      <li><b>src/layout.ts</b> &mdash; dagre auto-layout, since LSP gives no x/y</li>
+      <li><b>src/components/NodeCard.tsx</b> &mdash; renders a node, lazy-loads narration on click</li>
+      <li><b>src/components/DataFlowEdge.tsx</b> &mdash; custom edge, renders the <code>var: Type</code> label</li>
+      <li><b>src/components/QuestionBox.tsx</b> &mdash; free-text question &rarr; <code>/ask</code></li>
+    </ul>
+
+    <h3>Key signatures</h3>
+    <pre>function useGraph(position: Position, hops: number): {
+  nodes: Node[]; edges: Edge[]; loading: boolean; refetch: (p: Position) =&gt; void
+}
+
+function computeLayout(nodes: Node[], edges: Edge[]): PositionedNode[] <span class="c">// dagre, left-to-right</span>
+
+function NodeCard({ node, onExpand }: { node: Node; onExpand: (id: string) =&gt; void })
+
+function DataFlowEdge({ data }: { data: { arg?: string; type?: string } })</pre>
+
+    <div class="contract">
+      <div class="label">Rendering contract</div>
+      Narration is fetched lazily, per node, only on click &mdash; the initial <code>/graph</code> response never blocks on any agent call. Structure renders instantly; explanation appears a beat later. This is the same "deterministic first, judgment on top" split as the backend, expressed in the UI's loading behavior.
+    </div>
+  </div>
+
+  <footer>donkeymind &middot; low-level design, 5 parts &middot; next: day-by-day build calendar against this</footer>
+
+</div>

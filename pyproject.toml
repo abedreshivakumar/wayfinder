@@ -1,0 +1,28 @@
+[project]
+name = "wayfinder"
+version = "0.1.0"
+description = "Explain unfamiliar Python code: call graphs, data flow, and plain-language walkthroughs."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "mcp>=2.2.0",
+    "uvicorn[standard]>=0.53.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "integration: needs the pyright-langserver binary (skipped automatically without it)",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
