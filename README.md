@@ -67,8 +67,14 @@ the language server first, so the graph is exact and every explanation is ground
   functions really called which, then compares that with the static graph: calls static
   analysis missed (callbacks, dispatch tables) and calls that exist in the code but were never
   reached. It executes the repository's code, so it is off unless you enable it.
-- **Web UI.** An interactive graph (React + Vite): pick a repo, file and function, click nodes
-  to explain them, check their docs or explain the path between two, and view runtime traces.
+- **Repo map.** Every Python file in a repository and which files import which, with a
+  plain-language summary built from the analysis alone, so it needs no model.
+- **File view and file explanation.** One file drawn as its functions and the calls between them
+  (and out to other files of the repo), with the data flowing along those calls. `POST /explain-file`
+  turns that structure plus the file's source into a walkthrough of how the file works.
+- **Web UI.** An interactive app (React + Vite) with three modes: *Explore* (the repo map, then a
+  file's graph; click nodes to explain them, check their docs or explain the path between two),
+  *Runtime trace* and *Ask*.
 - **Two interfaces.** An MCP server (so Claude Code and other agents can call it as tools)
   and an HTTP API.
 
@@ -177,6 +183,7 @@ claude mcp add wayfinder -- uv run --directory /path/to/wayfinder python -m wayf
 | `explain_function` | `repo`, `file`, `symbol` | Plain-language explanation |
 | `explain_call_path` | `repo`, `from_file`, `from_symbol`, `to_file`, `to_symbol`, `hops=3` | Walkthrough of the calls between two functions |
 | `check_docs_drift` | `repo`, `file`, `symbol` | Documentation-versus-code findings |
+| `trace_runtime_calls` | `repo`, `file`, `function?`, `args?`, `kwargs?` | Calls that really happened, compared with the static graph. Refuses unless `WAYFINDER_ALLOW_TRACE` is set |
 
 All tools are read-only with respect to your code. Errors come back with actionable messages
 (for example, an ambiguous name lists the candidates so the caller can retry).
@@ -206,8 +213,11 @@ curl 'http://localhost:8000/graph?repo=/path/to/repo&file=app.py&symbol=handle_l
 | `POST /check-drift` | `{"node_id"}` | `node_id`, `name`, `findings`, `model_review` |
 | `POST /ask` | `{"repo", "question"}` | `text`, `tools_used`, `turns` |
 | `POST /trace` | `{"repo", "file", "function"?, "args"?, "kwargs"?}` | `nodes`, `edges` (each with a `status`), `error`, `returned`, `output` |
+| `POST /explain-file` | `{"repo", "file"}` | Plain-language walkthrough of one file |
 | `GET /files` | query: `repo` | `files` (Python files, relative to the repo) |
 | `GET /symbols` | query: `repo`, `file` | `symbols` (callable names with positions) |
+| `GET /repo-map` | query: `repo` | `files`, `edges` (which file imports which), `truncated` |
+| `GET /file-graph` | query: `repo`, `file` | The file's functions, the calls between them and the data flow along them |
 
 `/ask` is HTTP-only on purpose: exposing it as an MCP tool would be an agent asking an agent.
 Node ids come from a `GET /graph` response. Lines and columns are 1-indexed.
@@ -296,14 +306,17 @@ src/wayfinder/
   core/        config.py (all settings) · errors.py (one error hierarchy)
   domain/      plain data types: graph, labels, results
   lsp/         pyright client: message framing, handshake, symbol lookup
-  analysis/    call graph, path search, source extraction, dataflow/, docstrings
+  analysis/    call graph, path search, source extraction, imports, docstrings,
+               dataflow/ · tracing/ (runtime trace and reconciliation with the static graph)
   storage/     SQLite schema, row mapping, repository
   agents/      llm/ (interface, Gemini, guarded wrapper) · prompts/ · narrator,
-               path_explainer, drift_checker, orchestrator, claude_code_runner
+               path_explainer, drift_checker, file_explainer, orchestrator, claude_code_runner
   guardrails/  inputs · secrets · llm_input · llm_output · egress · rate_limit
-  services/    analysis · explanation · drift · orchestration · driver pool · model access
+  services/    analysis · explanation · drift · overview · tracing · orchestration ·
+               driver pool · model access
   api/         FastAPI app, routers, error handlers
   mcp_server/  MCP server and tools
+web/src/       React + Vite UI (repo map, file view, runtime trace, ask)
 tests/fixtures/sample_repo/   a tiny known-answer repo for manual checks
 artifacts/                    early design notes (see Status below)
 ```
@@ -368,12 +381,15 @@ graph (`handle_login` calls `fetch_user` and `process`; `fetch_user` returns a `
   for the model, including exactly what options are handed to Claude Code, but not end to end.
 - **`/ask` uses your own Claude Code login,** so it is meant for personal use. If you distribute this, each
   person should use their own credentials; check Anthropic's current terms for the Agent SDK.
-- **No automated tests yet.**
+- **No automated tests yet.** The repo map lists at most 2,000 files and a file view draws at most
+  60 functions; the response says when it was cut short.
+- `pyright` reports a few false positives on the MCP SDK's `readOnlyHint`/`destructiveHint` arguments.
 
 ## Roadmap
 
 Built: call graph, data flow, MCP and HTTP interfaces, Narrator, Path-Explainer,
-Drift-Checker, Orchestrator (`/ask`), Flow-Tracer, web UI, guardrails.
+Drift-Checker, File-Explainer, Orchestrator (`/ask`), Flow-Tracer, repo map and file view,
+web UI, guardrails.
 
 Not yet built:
 
