@@ -4,23 +4,28 @@ from __future__ import annotations
 
 import hashlib
 
+from wayfinder.agents.file_explainer import FileExplainer
 from wayfinder.agents.narrator import Narrator
 from wayfinder.agents.path_explainer import PathExplainer
 from wayfinder.analysis.source import extract_source
 from wayfinder.core.errors import BadRequest, NodeNotFound, NoPath
 from wayfinder.domain.graph import Node
-from wayfinder.domain.results import Narration, PathExplanation
+from wayfinder.domain.results import FileExplanation, Narration, PathExplanation
 from wayfinder.guardrails import inputs
 from wayfinder.services.analysis import AnalysisService
 from wayfinder.services.context import ServiceContext
 from wayfinder.services.model_access import ModelAccess
+from wayfinder.services.overview import OverviewService
 
 
 class ExplanationService:
-    def __init__(self, ctx: ServiceContext, analysis: AnalysisService, access: ModelAccess) -> None:
+    def __init__(
+        self, ctx: ServiceContext, analysis: AnalysisService, access: ModelAccess, overview: OverviewService
+    ) -> None:
         self._ctx = ctx
         self._analysis = analysis
         self._access = access
+        self._overview = overview
 
     # --- one function ---
 
@@ -71,6 +76,37 @@ class ExplanationService:
         dfg = self._analysis.analyze(repo, file, symbol=symbol, line=line, col=col, hops=1)
         assert dfg.graph.root_id is not None
         return self.narrate(dfg.graph.root_id)
+
+    # --- a whole file ---
+
+    def explain_file(self, repo: str, file: str) -> FileExplanation:
+        """Plain-language walkthrough of one file, from its source and its analyzed structure."""
+        ctx = self._ctx
+        repo_root, file_path = inputs.resolve_file(repo, file)
+        rel = file_path.relative_to(repo_root).as_posix()
+        llm = self._access.get()
+        explainer = FileExplainer(self._access.guarded(llm))
+
+        graph = self._overview.file_graph(repo, file)  # takes the lock itself, per function
+        try:
+            source = file_path.read_text(errors="replace")[: ctx.settings.limits.max_file_source_chars]
+        except OSError as e:
+            raise BadRequest(f"can't read {rel}") from e
+        prompt = explainer.build_prompt(rel, source, graph)
+        digest = hashlib.sha256(prompt.encode()).hexdigest()
+        with ctx.lock:
+            # Stored beside path explanations: both are text keyed only by a hash of the
+            # exact prompt, so the same table serves.
+            cached = ctx.store.get_path_explanation(digest)
+        if cached is not None:
+            return FileExplanation(rel, cached, cached=True)
+
+        if llm.external:
+            self._access.egress.check(file_path)
+        text = explainer.explain(prompt)  # lock not held: this takes seconds
+        with ctx.lock:
+            ctx.store.set_path_explanation(digest, text, explainer.model)
+        return FileExplanation(rel, text, cached=False)
 
     # --- a chain of calls ---
 

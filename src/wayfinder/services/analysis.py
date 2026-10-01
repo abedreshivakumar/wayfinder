@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import os
+
 from wayfinder.analysis.call_graph import build_call_graph
 from wayfinder.analysis.dataflow.annotate import annotate_graph
 from wayfinder.core.errors import AmbiguousSymbol, BadRequest, SymbolNotFound
 from wayfinder.domain.graph import Direction
 from wayfinder.domain.labels import DataFlowGraph
 from wayfinder.guardrails import inputs
-from wayfinder.lsp.symbols import find_symbols
+from wayfinder.domain.results import SymbolMatch
+from wayfinder.lsp.symbols import find_symbols, list_symbols
 from wayfinder.services.context import ServiceContext
+
+
+_SKIPPED_DIRS = {"node_modules", "__pycache__", "venv", "env", "build", "dist", "site-packages"}
 
 
 class AnalysisService:
@@ -56,3 +62,24 @@ class AnalysisService:
 
             ctx.store.save(annotate_graph(graph, driver))
             return ctx.store.get_dataflow_graph(graph.root_id, hops, direction)
+
+    def list_files(self, repo: str) -> list[str]:
+        """The Python files in a repo, relative to it, for the UI's file picker. Skips
+        hidden folders, virtual environments and build output."""
+        repo_root = inputs.resolve_repo(repo)
+        cap = self._ctx.settings.limits.max_listed_files
+        found: list[str] = []
+        for folder, dirs, files in os.walk(repo_root):
+            dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in _SKIPPED_DIRS)
+            for name in sorted(files):
+                if name.endswith(".py"):
+                    found.append(os.path.relpath(os.path.join(folder, name), repo_root))
+                    if len(found) >= cap:
+                        return found
+        return found
+
+    def list_symbols(self, repo: str, file: str) -> list[SymbolMatch]:
+        """The functions, methods and classes in one file."""
+        repo_root, file_path = inputs.resolve_file(repo, file)
+        with self._ctx.lock:
+            return list_symbols(self._ctx.pool.get(repo_root), file_path)

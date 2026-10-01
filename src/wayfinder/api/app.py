@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from wayfinder.api import error_handlers
-from wayfinder.api.routers import explain, graph
+from wayfinder.api.routers import ask, browse, explain, graph, trace
 from wayfinder.services import build_services
 
 
@@ -27,4 +29,12 @@ def create_app() -> FastAPI:
     error_handlers.register(app)
     app.include_router(graph.router)
     app.include_router(explain.router)
+    app.include_router(ask.router)
+    app.include_router(browse.router)
+    app.include_router(trace.router)
+    # The built web UI (`npm run build` in web/), when it exists. Mounted last so the API
+    # routes above win.
+    ui = Path(__file__).resolve().parents[3] / "web" / "dist"
+    if ui.is_dir():
+        app.mount("/", StaticFiles(directory=ui, html=True), name="ui")
     return app

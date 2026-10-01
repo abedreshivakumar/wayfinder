@@ -6,11 +6,15 @@ messages to send, in what order, to get pyright to answer "who calls this functi
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
 from wayfinder.lsp.client import LSPClient
 from wayfinder.lsp.position import to_lsp_position
+
+_INCOMING_RETRY_DELAY = 0.5
+_WARMUP_SECONDS = 3.0  # how long after a file is opened pyright may still answer "no callers" wrongly
 
 
 def _file_uri(path: Path) -> str:
@@ -23,6 +27,7 @@ class PyrightDriver:
         self.client = LSPClient()
         # file -> (mtime_ns, version) of the text pyright currently has for it
         self._opened: dict[Path, tuple[int, int]] = {}
+        self._last_open = time.monotonic()
 
     def start(self) -> None:
         self.client.start(["pyright-langserver", "--stdio"])
@@ -91,6 +96,7 @@ class PyrightDriver:
                 },
             )
         self._opened[file] = (mtime, version)
+        self._last_open = time.monotonic()
 
     # --- the actual questions we care about ---
 
@@ -108,7 +114,14 @@ class PyrightDriver:
 
     def incoming_calls(self, item: dict[str, Any]) -> list[dict[str, Any]]:
         """Who calls this symbol."""
+        # Right after a file is opened, pyright can answer [] for a moment while it finishes
+        # scanning the project. An empty answer is re-asked, but only inside that warm-up
+        # window: later, "no callers" is believed at once, so a file full of uncalled
+        # functions doesn't pay a delay for each.
         result = self.client.request("callHierarchy/incomingCalls", {"item": item})
+        while not result and time.monotonic() - self._last_open < _WARMUP_SECONDS:
+            time.sleep(_INCOMING_RETRY_DELAY)
+            result = self.client.request("callHierarchy/incomingCalls", {"item": item})
         return result or []
 
     def outgoing_calls(self, item: dict[str, Any]) -> list[dict[str, Any]]:

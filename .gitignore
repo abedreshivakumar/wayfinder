@@ -12,3 +12,7 @@ wheels/
 # Local secrets and data - never commit these
 .env
 *.db
+
+web/node_modules/
+web/dist/
+.DS_Store

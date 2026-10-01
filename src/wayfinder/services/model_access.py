@@ -29,6 +29,10 @@ class ModelAccess:
             )
         return self._llm
 
+    def charge(self) -> None:
+        """Count one hosted-model call against the shared rate limit (RateLimited if over)."""
+        self._limiter.acquire()
+
     def guarded(self, llm: LLM) -> GuardedLLM:
         """`llm` with the size limit, rate limit, offline switch and output cleaning applied."""
         return GuardedLLM(llm, self._settings.limits, self._limiter, self._settings.offline)

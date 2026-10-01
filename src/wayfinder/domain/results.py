@@ -45,7 +45,57 @@ class DriftReport:
 
 
 @dataclass(frozen=True)
+class Answer:
+    text: str
+    tools_used: list[str]  # which tools the model chose, in order, without repeats
+    turns: int | None  # how many rounds it took, when the runner reports it
+
+
+@dataclass(frozen=True)
 class Narration:
     node_id: str
     text: str
     cached: bool  # True when an earlier explanation of identical code was reused
+
+
+@dataclass(frozen=True)
+class TraceNode:
+    id: str  # "file:qualified.name:line", unique within one trace
+    name: str  # "fetch_user" or "User.__init__"
+    file: str  # relative to the repo; for code outside the repo, the file name only
+    line: int  # where the function is defined, 1-indexed (0 for a program's top level)
+    in_repo: bool
+
+
+@dataclass(frozen=True)
+class TraceEdge:
+    from_id: str
+    to_id: str
+    count: int  # how many times the call happened (0 for "not_exercised")
+    # confirmed: the static graph has this call too.
+    # runtime_only: it happened, but static analysis did not find it (dynamic dispatch,
+    #   callbacks, monkey-patching) - the calls only a real run can show.
+    # not_exercised: the static graph has it, but this run never made it.
+    # module_level: made by the top level of a file, which static analysis is not asked about.
+    # unchecked: the caller could not be checked against the static graph.
+    status: str
+
+
+@dataclass(frozen=True)
+class TraceReport:
+    entry: str  # what was run: a file, or "file:function"
+    nodes: list[TraceNode]
+    edges: list[TraceEdge]
+    error: str | None  # the program raised, exited non-zero or hit the time limit
+    returned: str | None  # what the function returned, shortened
+    output: str  # what the program printed, shortened
+    truncated: bool  # the run made more distinct calls than were recorded
+    checked_functions: int  # callers compared against the static graph
+    unchecked_functions: int  # callers left out of that comparison, to stay under the limit
+
+
+@dataclass(frozen=True)
+class FileExplanation:
+    file: str  # relative to the repo
+    text: str
+    cached: bool  # True when an earlier explanation of identical code and structure was reused

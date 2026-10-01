@@ -150,3 +150,28 @@ def check_docs_drift(repo: str, file: str, symbol: str) -> dict[str, Any]:
     """
     with tool_errors():
         return asdict(get_services().drift.check_symbol(repo, file, symbol=symbol))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+def trace_runtime_calls(
+    repo: str, file: str, function: str | None = None, args: list[Any] | None = None, kwargs: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """RUN part of a Python repository and report which functions really called which.
+
+    This executes the repository's code, so it only works when the server owner has set
+    WAYFINDER_ALLOW_TRACE=1; otherwise it refuses.
+
+    Args:
+        repo: Absolute path to the repository root.
+        file: Path of the file to run, relative to `repo`.
+        function: Name of a top-level function in `file` to call. Omit to run `file` as a script.
+        args: Positional arguments for `function`, as JSON values.
+        kwargs: Keyword arguments for `function`, as JSON values.
+
+    Returns `nodes` and `edges` (calls that happened, with counts). Each edge's `status`:
+    confirmed (static analysis agrees), runtime_only (static analysis missed it - callbacks,
+    dynamic dispatch), not_exercised (static analysis found it but this run never made it),
+    module_level, or unchecked. Also `error`, `returned` and `output` from the run.
+    """
+    with tool_errors():
+        return asdict(get_services().tracing.trace(repo, file, function, args, kwargs))

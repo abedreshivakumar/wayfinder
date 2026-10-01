@@ -65,9 +65,10 @@ class GraphRepository:
                 "DELETE FROM call_labels WHERE caller_id = ? AND callee_id = ?",
                 [(e.from_id, e.to_id) for e in graph.edges],
             )
+            # OR IGNORE: one line can call the same function twice; the first call is kept.
             self._db.executemany(
                 """
-                INSERT INTO call_labels (caller_id, callee_id, line, args_json, returns_var, returns_type)
+                INSERT OR IGNORE INTO call_labels (caller_id, callee_id, line, args_json, returns_var, returns_type)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 [mappers.call_label_params(c) for c in dfg.call_labels],

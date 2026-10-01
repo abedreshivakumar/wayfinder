@@ -25,13 +25,30 @@ def check_hops(hops: int, limits: Limits) -> None:
         raise BadRequest(f"hops must be between 1 and {limits.max_hops}")
 
 
+def resolve_repo(repo: str) -> Path:
+    repo_root = Path(repo).expanduser().resolve()
+    if not repo_root.is_dir():
+        raise BadRequest(f"repo is not a directory: {repo}")
+    return repo_root
+
+
+def check_question(question: str, limits: Limits) -> str:
+    """A plain-English question, trimmed. Refused if empty or too long to be one."""
+    question = question.strip()
+    if not question:
+        raise BadRequest("the question is empty")
+    if "\x00" in question:
+        raise BadRequest("the question contains a null character")
+    if len(question) > limits.max_question_chars:
+        raise BadRequest(f"the question is {len(question):,} characters; the limit is {limits.max_question_chars:,}")
+    return question
+
+
 def resolve_file(repo: str, file: str) -> tuple[Path, Path]:
     """(repo root, file) as real paths, refusing anything that isn't a Python file inside
     the repo. This is the sandbox: `../../etc/passwd` or an absolute path elsewhere
     never reaches pyright."""
-    repo_root = Path(repo).expanduser().resolve()
-    if not repo_root.is_dir():
-        raise BadRequest(f"repo is not a directory: {repo}")
+    repo_root = resolve_repo(repo)
     file_path = (repo_root / file).resolve()
     if not file_path.is_relative_to(repo_root):
         raise BadRequest("file must be inside the repo")

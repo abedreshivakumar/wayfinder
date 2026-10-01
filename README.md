@@ -60,6 +60,15 @@ the language server first, so the graph is exact and every explanation is ground
   `Raises` lists. Static findings need no model; a model can add a review of fuzzier claims.
 - **Works offline.** Analysis runs locally. Only the explanations and the model half of the
   drift check use a hosted model, and an offline switch turns that off entirely.
+- **Ask in plain English.** `POST /ask` takes a question like *"who calls `fetch_user` and what do
+  they pass it?"* and lets Claude, running on your own Claude Code login, choose which of the
+  tools above to call and answer from what they return.
+- **Runtime trace (Flow-Tracer).** Optionally runs a file or one function and records which
+  functions really called which, then compares that with the static graph: calls static
+  analysis missed (callbacks, dispatch tables) and calls that exist in the code but were never
+  reached. It executes the repository's code, so it is off unless you enable it.
+- **Web UI.** An interactive graph (React + Vite): pick a repo, file and function, click nodes
+  to explain them, check their docs or explain the path between two, and view runtime traces.
 - **Two interfaces.** An MCP server (so Claude Code and other agents can call it as tools)
   and an HTTP API.
 
@@ -128,6 +137,8 @@ receives. Documentation drift, for a function whose docstring has gone stale:
 - Python 3.12 or newer
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - Node.js, for `pyright` (`npm install -g pyright`; `pyright-langserver` must be on your `PATH`)
+- Only for `/ask`: [Claude Code](https://claude.com/claude-code) installed and logged in. No API key is
+  needed; the Claude Agent SDK uses that login
 
 ### Install
 
@@ -170,6 +181,16 @@ claude mcp add wayfinder -- uv run --directory /path/to/wayfinder python -m wayf
 All tools are read-only with respect to your code. Errors come back with actionable messages
 (for example, an ambiguous name lists the candidates so the caller can retry).
 
+### Web UI
+
+```bash
+cd web && npm install && npm run build      # once
+uv run uvicorn wayfinder.api.main:app       # the server now also serves the UI at http://localhost:8000
+```
+
+For UI development run `npm run dev` in `web/` (port 5173, forwards `/api` to the server on 8000).
+Runtime tracing additionally needs `WAYFINDER_ALLOW_TRACE=1`.
+
 ### HTTP API
 
 ```bash
@@ -183,7 +204,12 @@ curl 'http://localhost:8000/graph?repo=/path/to/repo&file=app.py&symbol=handle_l
 | `POST /narrate` | `{"node_id"}` | `node_id`, `text`, `cached` |
 | `POST /explain-path` | `{"from_id", "to_id", "max_hops"}` | `node_ids`, `names`, `text`, `cached` |
 | `POST /check-drift` | `{"node_id"}` | `node_id`, `name`, `findings`, `model_review` |
+| `POST /ask` | `{"repo", "question"}` | `text`, `tools_used`, `turns` |
+| `POST /trace` | `{"repo", "file", "function"?, "args"?, "kwargs"?}` | `nodes`, `edges` (each with a `status`), `error`, `returned`, `output` |
+| `GET /files` | query: `repo` | `files` (Python files, relative to the repo) |
+| `GET /symbols` | query: `repo`, `file` | `symbols` (callable names with positions) |
 
+`/ask` is HTTP-only on purpose: exposing it as an MCP tool would be an agent asking an agent.
 Node ids come from a `GET /graph` response. Lines and columns are 1-indexed.
 
 #### Status codes
@@ -212,6 +238,7 @@ by accident (and this repo's `.gitignore` excludes `.env` and `*.db` regardless)
 | `WAYFINDER_DB` | `~/.wayfinder/graph.db` | Where analysis results and cached explanations are stored |
 | `WAYFINDER_OFFLINE` | off | `1`/`true`/`yes`/`on` blocks every call to a hosted model |
 | `WAYFINDER_LLM_ALLOWED_REPOS` | none | Repos whose source may be sent to a hosted model, separated by `:` |
+| `WAYFINDER_ALLOW_TRACE` | off | `1`/`true`/`yes`/`on` lets `POST /trace` and the MCP `trace_runtime_calls` tool run the repo's code. Not a sandbox: enable only for code you trust |
 
 Example `~/.wayfinder/.env`:
 
@@ -232,6 +259,7 @@ are deliberately strict:
 | **Secret redaction** | Cloud keys, tokens, JWTs, private keys, URL passwords and secret-looking assignments are blanked out of every prompt and every model reply. Literal values are also stripped from type text, so a constant can't leak through its type |
 | **Untrusted source** | Repository code is fenced so it cannot close its own block, and the model is instructed never to follow instructions found inside it |
 | **Limits** | Hops are capped at 5, prompts at 30,000 characters, hosted-model calls at 20 per minute. Cached explanations cost nothing |
+| **Ask (`/ask`)** | The question and everything the tools find go to Anthropic through your Claude Code login, so it is refused in offline mode and unless the repo is allowlisted. The agent gets **no built-in tools** (no shell, no file access), none of your personal Claude settings or hooks, and runs in an empty temporary directory. Its tools are bound to the one repo you named, take no repo argument, and return compact text with relative paths, secrets redacted and size capped. At most 8 turns per question, and each question counts against the rate limit |
 | **Path sandbox** | A request can only read Python files inside the repo it names; `../` and symlinks that leave the repo are refused |
 | **Withheld source on chains** | In a call-path explanation, source from files outside your allowlist is withheld from the prompt |
 
@@ -270,10 +298,10 @@ src/wayfinder/
   lsp/         pyright client: message framing, handshake, symbol lookup
   analysis/    call graph, path search, source extraction, dataflow/, docstrings
   storage/     SQLite schema, row mapping, repository
-  agents/      llm/ (interface, Gemini, guarded wrapper) · prompts/ ·
-               narrator, path_explainer, drift_checker
+  agents/      llm/ (interface, Gemini, guarded wrapper) · prompts/ · narrator,
+               path_explainer, drift_checker, orchestrator, claude_code_runner
   guardrails/  inputs · secrets · llm_input · llm_output · egress · rate_limit
-  services/    analysis · explanation · drift · driver pool · model access
+  services/    analysis · explanation · drift · orchestration · driver pool · model access
   api/         FastAPI app, routers, error handlers
   mcp_server/  MCP server and tools
 tests/fixtures/sample_repo/   a tiny known-answer repo for manual checks
@@ -316,6 +344,8 @@ graph (`handle_login` calls `fetch_user` and `process`; `fetch_user` returns a `
 | `'name' matches N symbols. Use a qualified name` | Repeat with `Class.method`, or use `line`+`col` |
 | Types show as unknown / a call is missing | pyright can't see that package, or the call is dynamic. See [Limitations](#limitations) |
 | First request to a repo is slow | pyright is starting and indexing; later requests reuse the running process |
+| `could not run Claude Code` | `/ask` needs Claude Code installed and logged in. Run `claude` once in a terminal to log in |
+| `Claude used all 8 turns without finishing` | The question needed too many steps. Ask something narrower, or name the function and file |
 | Stale results | Analysis re-reads changed files automatically. To start clean, delete `~/.wayfinder/graph.db` |
 
 ## Limitations
@@ -330,18 +360,23 @@ graph (`handle_login` calls `fetch_user` and `process`; `fetch_user` returns a `
 - **Drift checks** cover functions and methods, not classes. A `Raises` entry that is never
   raised *directly* is reported as low severity, since the exception may come from a callee.
 - **Single user, local.** There is no authentication; it is meant to run on your own machine.
+- **The web UI has been built and type-checked but not clicked through in a browser yet**, and the
+  runtime trace is verified only on the small sample repo. It records calls inside the repo
+  under the interpreter Wayfinder runs on, so a repo needing its own dependencies may fail to
+  run; the failure is reported in the trace's `error`.
+- **`/ask` has not yet been run against a live Claude session.** It is verified against a scripted stand-in
+  for the model, including exactly what options are handed to Claude Code, but not end to end.
+- **`/ask` uses your own Claude Code login,** so it is meant for personal use. If you distribute this, each
+  person should use their own credentials; check Anthropic's current terms for the Agent SDK.
 - **No automated tests yet.**
 
 ## Roadmap
 
 Built: call graph, data flow, MCP and HTTP interfaces, Narrator, Path-Explainer,
-Drift-Checker, guardrails.
+Drift-Checker, Orchestrator (`/ask`), Flow-Tracer, web UI, guardrails.
 
 Not yet built:
 
-- An **Orchestrator** agent that reads a plain-English question and picks the right tool.
-- A **Flow-Tracer** that observes real execution to cover the calls static analysis cannot.
-- A frontend that draws the graph interactively.
 - Other languages (the LSP-based design is meant to make each one a new language server, not
   a new engine).
 

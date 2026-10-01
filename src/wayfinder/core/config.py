@@ -28,6 +28,16 @@ class Limits:
     max_prompt_chars: int = 30_000  # everything sent to a model in one call
     max_output_chars: int = 4_000  # what we accept back from a model
     llm_calls_per_minute: int = 20  # hosted models cost money; this bounds a runaway loop
+    max_question_chars: int = 2_000  # a plain-English question to the Orchestrator
+    max_turns: int = 8  # tool-using rounds the Orchestrator may take for one question
+    max_tool_result_chars: int = 12_000  # what any one tool may hand back to the model
+    trace_timeout_seconds: int = 30  # a traced run is stopped after this long
+    max_trace_edges: int = 3_000  # distinct calls recorded in one run; the rest are dropped
+    max_traced_functions: int = 40  # functions checked against the static graph per trace
+    max_trace_input_chars: int = 10_000  # the JSON arguments handed to the traced function
+    max_listed_files: int = 2_000  # Python files listed for the UI's file picker
+    max_file_functions: int = 60  # functions analyzed when a whole file is drawn
+    max_file_source_chars: int = 12_000  # a file's source in a prompt
 
 
 @dataclass(frozen=True)
@@ -42,6 +52,9 @@ class Settings:
     # A kill switch: while on, no prompt is sent to any hosted model, whatever else is
     # configured. Analysis (which runs locally) and already-cached explanations still work.
     offline: bool = False
+    # Tracing RUNS the repository's own code, so it is off unless you turn it on. Nothing
+    # else in Wayfinder executes the code it analyzes.
+    allow_trace: bool = False
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -57,6 +70,7 @@ class Settings:
             gemini_api_key=setting("GEMINI_API_KEY"),
             model=setting("WAYFINDER_MODEL") or DEFAULT_MODEL,
             offline=(setting("WAYFINDER_OFFLINE") or "").lower() in ("1", "true", "yes", "on"),
+            allow_trace=(setting("WAYFINDER_ALLOW_TRACE") or "").lower() in ("1", "true", "yes", "on"),
             llm_allowed_repos=frozenset(
                 Path(p).expanduser().resolve()
                 for p in (part.strip() for part in allowed.split(os.pathsep))

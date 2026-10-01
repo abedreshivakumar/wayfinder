@@ -6,10 +6,13 @@ from typing import Protocol
 
 
 class LLM(Protocol):
-    model: str
+    @property
+    def model(self) -> str: ...
+
     # True when prompts leave this machine (a hosted API); False for a local model or a
     # test double. The guardrails apply their data-egress rules only to external ones.
-    external: bool
+    @property
+    def external(self) -> bool: ...
 
     def complete(self, system: str, prompt: str) -> str:
         """One system prompt and one user prompt in, the model's text out."""

@@ -39,3 +39,19 @@ def find_symbols(driver: PyrightDriver, file: Path, query: str) -> list[SymbolMa
 
     walk(driver.document_symbols(file), "")
     return found
+
+
+def list_symbols(driver: PyrightDriver, file: Path) -> list[SymbolMatch]:
+    """Every callable symbol in `file`, in file order, for picking one from a list."""
+    found: list[SymbolMatch] = []
+
+    def walk(symbols: list[dict[str, Any]], prefix: str) -> None:
+        for sym in symbols:
+            qualified = f"{prefix}{sym['name']}"
+            if sym["kind"] in _CALLABLE_KINDS:
+                line, col = from_lsp_position(sym["selectionRange"]["start"])
+                found.append(SymbolMatch(qualified, sym["kind"], line, col))
+            walk(sym.get("children", []), f"{qualified}.")
+
+    walk(driver.document_symbols(file), "")
+    return found
