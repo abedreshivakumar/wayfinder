@@ -34,3 +34,12 @@ export function buildTree(paths: string[]): TreeNode {
   order(root);
   return root;
 }
+
+// A file a newcomer would skip on a first pass: tests, fixtures, package-init boilerplate,
+// build/dev scripts. Shown only when the UI's "show everything" toggle is on.
+const NOISE = [
+  /(^|\/)tests?(\/|$)/i, /(^|\/)test_[^/]+\.py$/, /[^/]+_test\.py$/, /(^|\/)conftest\.py$/,
+  /(^|\/)__init__\.py$/, /(^|\/)(migrations|fixtures|scripts|examples|docs)(\/|$)/i,
+  /(^|\/)setup\.py$/, /(^|\/)conf\.py$/,
+];
+export const isNoise = (path: string) => NOISE.some((re) => re.test(path));

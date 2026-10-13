@@ -11,7 +11,9 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from wayfinder.analysis.imports import ImportEdge, build_import_graph
+from wayfinder.analysis.imports import build_import_graph
+from wayfinder.analysis.outline import outline
+from wayfinder.analysis.structure import build_structure
 from wayfinder.core.errors import WayfinderError
 from wayfinder.guardrails import inputs
 from wayfinder.services.analysis import AnalysisService
@@ -40,6 +42,16 @@ class OverviewService:
             "edges": [asdict(e) for e in edges],
             "truncated": len(files) >= self._ctx.settings.limits.max_listed_files,
         }
+
+    def structure(self, repo: str) -> dict[str, Any]:
+        """Modules, layers, module links, files with their functions and schemas, and a
+        reading order: everything the overview screens need, in one response."""
+        repo_root = inputs.resolve_repo(repo)
+        files = self._analysis.list_files(repo)
+        result = build_structure(repo_root, files)
+        result["truncated"] = len(files) >= self._ctx.settings.limits.max_listed_files
+        result["repo"] = repo_root.name
+        return result
 
     def file_graph(self, repo: str, file: str) -> dict[str, Any]:
         """The functions in one file and the calls between them (and out to other files of
@@ -95,8 +107,24 @@ class OverviewService:
                     seen_links.add(key)
                     links.append(f)
 
+        try:
+            info = outline(file_path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, SyntaxError, ValueError):
+            info = None
+        if info:
+            by_line = {f.line: f for f in info.functions}
+            for n in nodes.values():
+                f = by_line.get(n["start_line"]) if n["in_file"] else None
+                if f is None and n["in_file"]:  # a decorated def: pyright's line is the name's, ast's the first decorator's
+                    f = next((g for g in info.functions if g.name == n["name"] and abs(g.line - n["start_line"]) <= 6), None)
+                if f:
+                    n["params"] = [asdict(p) for p in f.params]
+                    n["returns"] = f.returns
+                    n["doc"] = f.doc
+
         result_edges = [{"from_id": a, "to_id": b} for a, b in sorted(edges)]
         return {
+            "schemas": [asdict(x) for x in info.schemas] if info else [],
             "file": rel_file,
             "nodes": list(nodes.values()),
             "edges": result_edges,

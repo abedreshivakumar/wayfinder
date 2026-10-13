@@ -25,6 +25,16 @@ const style: cytoscape.StylesheetJson = [
     },
   },
   { selector: "node.broken", style: { "border-width": 2, "border-color": "#f85149", "border-style": "dashed" } },
+  {
+    selector: "node.group",
+    style: {
+      shape: "round-rectangle", "background-color": "data(color)", "background-opacity": 0.07,
+      "border-width": 1.5, "border-color": "data(color)", "border-opacity": 0.55, "border-style": "dashed",
+      label: "data(label)", "text-valign": "top", "text-halign": "left", "text-margin-y": -6, "text-margin-x": 6,
+      "font-size": 11, "font-weight": 700, color: "data(color)", padding: "26px",
+      "compound-sizing-wrt-labels": "include", "min-width": "60px",
+    },
+  },
   { selector: "node:selected", style: { "border-color": "#f2cc60", "border-width": 4, "border-style": "solid" } },
   { selector: ".faded, .hover-dim", style: { opacity: 0.12 } },
   {
@@ -91,7 +101,7 @@ export function GraphView({ elements, layout = "hierarchy", selectedId, onSelect
     instance.add(elements);
     const options =
       layout === "force"
-        ? { name: "cose", animate: true, animationDuration: 500, fit: true, padding: 50, nodeRepulsion: () => 9000, idealEdgeLength: () => 90, randomize: true }
+        ? { name: "cose", animate: true, animationDuration: 500, fit: true, padding: 50, nodeRepulsion: () => 9000, idealEdgeLength: () => 90, randomize: true, nestingFactor: 1.2 }
         : { name: "dagre", rankDir: "LR", nodeSep: 36, rankSep: 110, fit: true, padding: 40, animate: true, animationDuration: 350 };
     instance.layout(options as cytoscape.LayoutOptions).run();
   }, [elements, layout]);

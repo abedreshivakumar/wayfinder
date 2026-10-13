@@ -44,15 +44,31 @@ export interface FileInfo { path: string; lines: number; classes: number; functi
 export interface ImportEdge { source: string; target: string; names: string[]; weight: number }
 export interface RepoMap { files: FileInfo[]; edges: ImportEdge[]; truncated: boolean }
 
-export interface FileNode extends GraphNode { label: string; rel_file: string; in_file: boolean }
+export interface FileNode extends GraphNode { label: string; rel_file: string; in_file: boolean; params?: Param[]; returns?: string | null; doc?: string | null }
 export interface FileSummary {
   lines: number | null; doc: string | null; classes: string[]; functions: string[];
   entry_points: string[]; imports: string[]; imported_by: string[]; text: string;
 }
 export interface FileGraph {
   file: string; nodes: FileNode[]; edges: GraphEdge[]; call_labels: CallLabel[]; flow_links: FlowLink[];
-  summary: FileSummary; truncated: boolean;
+  summary: FileSummary; truncated: boolean; schemas: SchemaInfo[];
 }
+
+export interface Param { name: string; type: string | null }
+export interface FnInfo { qualname: string; name: string; line: number; params: Param[]; returns: string | null; doc: string | null; is_async: boolean }
+export interface SchemaInfo { name: string; kind: string; line: number; fields: Param[]; doc: string | null }
+export type Layer = "entry" | "core" | "data";
+export interface StructFile {
+  path: string; module: string; layer: Layer; noise: boolean; lines: number; doc: string | null; error: string | null;
+  functions: FnInfo[]; classes: string[]; schemas: SchemaInfo[];
+}
+export interface Module { key: string; name: string; layer: Layer; files: string[]; rank: number }
+export interface Structure {
+  repo: string; mode: "modules" | "files"; modules: Module[]; module_edges: { source: string; target: string; weight: number }[];
+  files: StructFile[]; file_edges: ImportEdge[]; reading_order: string[]; reading_similar: Record<string, number>; hidden: number; truncated: boolean;
+}
+export interface Purposes { modules: Record<string, string>; files: Record<string, string>; source: "model" | "docstrings"; note: string | null }
+export interface FileExplanation { file: string; summary: string; steps: string[]; functions: Record<string, string>; cached: boolean }
 
 export interface Symbol { qualified_name: string; kind: number; line: number; col: number }
 
@@ -106,7 +122,9 @@ const query = (params: Record<string, string | number | undefined>) =>
 export const api = {
   repoMap: (repo: string) => request<RepoMap>(`/repo-map?${query({ repo })}`),
   fileGraph: (repo: string, file: string) => request<FileGraph>(`/file-graph?${query({ repo, file })}`),
-  explainFile: (repo: string, file: string) => post<{ text: string; cached: boolean }>("/explain-file", { repo, file }),
+  explainFile: (repo: string, file: string) => post<FileExplanation>("/explain-file", { repo, file }),
+  overview: (repo: string) => request<Structure>(`/overview?${query({ repo })}`),
+  purposes: (repo: string) => request<Purposes>(`/purposes?${query({ repo })}`),
   files: (repo: string) => request<{ files: string[] }>(`/files?${query({ repo })}`).then((r) => r.files),
   symbols: (repo: string, file: string) =>
     request<{ symbols: Symbol[] }>(`/symbols?${query({ repo, file })}`).then((r) => r.symbols),

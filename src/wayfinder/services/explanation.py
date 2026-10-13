@@ -7,6 +7,7 @@ import hashlib
 from wayfinder.agents.file_explainer import FileExplainer
 from wayfinder.agents.narrator import Narrator
 from wayfinder.agents.path_explainer import PathExplainer
+from wayfinder.agents.prompts.json_reply import parse_json_object
 from wayfinder.analysis.source import extract_source
 from wayfinder.core.errors import BadRequest, NodeNotFound, NoPath
 from wayfinder.domain.graph import Node
@@ -98,15 +99,15 @@ class ExplanationService:
             # Stored beside path explanations: both are text keyed only by a hash of the
             # exact prompt, so the same table serves.
             cached = ctx.store.get_path_explanation(digest)
-        if cached is not None:
-            return FileExplanation(rel, cached, cached=True)
-
-        if llm.external:
-            self._access.egress.check(file_path)
-        text = explainer.explain(prompt)  # lock not held: this takes seconds
-        with ctx.lock:
-            ctx.store.set_path_explanation(digest, text, explainer.model)
-        return FileExplanation(rel, text, cached=False)
+        if cached is None:
+            if llm.external:
+                self._access.egress.check(file_path)
+            text = explainer.explain(prompt)  # lock not held: this takes seconds
+            with ctx.lock:
+                ctx.store.set_path_explanation(digest, text, explainer.model)
+        else:
+            text = cached
+        return _file_explanation(rel, text, cached is not None)
 
     # --- a chain of calls ---
 
@@ -182,3 +183,13 @@ class ExplanationService:
             return extract_source(node.path, node.name, node.start_line, max_chars)
         except (OSError, SyntaxError):  # file deleted, or edited into invalid Python
             return None
+
+
+def _file_explanation(rel: str, text: str, cached: bool) -> FileExplanation:
+    """The model's JSON reply as a FileExplanation; a reply that isn't JSON is kept as the summary."""
+    reply = parse_json_object(text)
+    if reply is None:
+        return FileExplanation(rel, text.strip(), [], {}, cached)
+    steps = [s.strip() for s in reply.get("steps") or [] if isinstance(s, str) and s.strip()]
+    functions = {k: v.strip() for k, v in (reply.get("functions") or {}).items() if isinstance(v, str)}
+    return FileExplanation(rel, str(reply.get("summary") or "").strip(), steps, functions, cached)

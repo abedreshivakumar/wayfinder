@@ -25,6 +25,22 @@ def list_symbols(services: ServicesDep, repo: str, file: str) -> dict[str, Any]:
     return {"symbols": [asdict(s) for s in services.analysis.list_symbols(repo, file)]}
 
 
+@router.get("/overview")
+def overview(services: ServicesDep, repo: str) -> dict[str, Any]:
+    """The repo as a newcomer needs it: modules with their layer (entry / core / data),
+    links between modules, every file with its functions, classes and schemas, a reading
+    order, and how many test or boilerplate files are hidden. No pyright, no model: fast."""
+    return services.overview.structure(repo)
+
+
+@router.get("/purposes")
+def purposes(services: ServicesDep, repo: str) -> dict[str, Any]:
+    """A one-line purpose for every module and file. Written by the model when the repo may be
+    sent to one (cached after the first time), otherwise taken from docstrings; `source` and
+    `note` say which and why."""
+    return services.purposes.purposes(repo)
+
+
 @router.get("/repo-map")
 def repo_map(services: ServicesDep, repo: str) -> dict[str, Any]:
     """Every file with its size, and which files import which: the whole-repo picture.
@@ -42,5 +58,6 @@ def file_graph(services: ServicesDep, repo: str, file: str) -> dict[str, Any]:
 
 @router.post("/explain-file")
 def explain_file(services: ServicesDep, body: ExplainFileRequest) -> dict[str, Any]:
-    """A model-written walkthrough of one file. Needs a model (403 offline)."""
+    """A model-written walkthrough of one file: `summary`, ordered `steps`, and a one-line
+    purpose per function in `functions`. Needs a model (403 offline)."""
     return asdict(services.explanation.explain_file(body.repo, body.file))

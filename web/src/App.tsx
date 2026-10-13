@@ -1,74 +1,135 @@
-import { useEffect, useState } from "react";
-import { api } from "./api";
+import { useCallback, useEffect, useState } from "react";
+import { api, type Purposes, type Structure } from "./api";
 import { AskTab } from "./AskTab";
-import { FileView } from "./FileView";
-import { MapView } from "./MapView";
-import { Sidebar } from "./Sidebar";
-import { TraceTab } from "./TraceTab";
-import { useAsync } from "./useAsync";
+import { baseName } from "./format";
+import { Palette } from "./Palette";
+import { useReadFiles } from "./progress";
+import { href, type Route, useRoute } from "./route";
+import { FileView } from "./views/FileView";
+import { FunctionView } from "./views/FunctionView";
+import { ModuleView } from "./views/ModuleView";
+import { Overview } from "./views/Overview";
 
-type Mode = "explore" | "trace" | "ask";
-const remembered = () => { try { return localStorage.getItem("wayfinder.repo") ?? ""; } catch { return ""; } };
+const RECENT = "wayfinder.recent";
+const recent = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT) ?? "[]"); } catch { return []; } };
+const remember = (repo: string) => { try { localStorage.setItem(RECENT, JSON.stringify([repo, ...recent().filter((r) => r !== repo)].slice(0, 5))); } catch { /* convenience only */ } };
 
 export default function App() {
-  const [repo, setRepo] = useState(remembered);
-  const [loadedRepo, setLoadedRepo] = useState(""); // the repo everything below belongs to; the text box may differ while typing
-  const [file, setFile] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>("explore");
-  const map = useAsync(api.repoMap);
+  const route = useRoute();
+  const [repo, setRepo] = useState<string>(() => recent()[0] ?? "");
+  const [structure, setStructure] = useState<Structure | null>(null);
+  const [purposes, setPurposes] = useState<Purposes | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [palette, setPalette] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const { markRead } = useReadFiles(repo);
 
-  const load = async () => {
-    const path = repo.trim();
-    try { localStorage.setItem("wayfinder.repo", path); } catch { /* remembering the path is a convenience only */ }
-    const m = await map.run(path);
-    setLoadedRepo(m ? path : "");
-    setFile(null);
-    setMode("explore");
-  };
+  const load = useCallback(async (path: string) => {
+    setLoading(true); setError(null); setPurposes(null);
+    try {
+      const s = await api.overview(path);
+      setStructure(s); setRepo(path); remember(path); setSwitching(false);
+      api.purposes(path).then(setPurposes).catch((e) => setPurposes({ modules: {}, files: {}, source: "docstrings", note: String(e.message ?? e) }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (repo) load(repo); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement).tagName);
-      if (e.key === "/" && !typing) { e.preventDefault(); document.getElementById("file-search")?.focus(); }
-      if (e.key === "Escape") { (document.activeElement as HTMLElement | null)?.blur(); if (!typing) setFile(null); }
+      if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || (e.key === "/" && !typing)) { e.preventDefault(); setPalette(true); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const data = map.data;
-  const openFile = (path: string) => { setFile(path); setMode("explore"); };
+  if (!structure || switching) return <Welcome initial={repo} loading={loading} error={error} onLoad={load} onCancel={structure ? () => setSwitching(false) : undefined} />;
+
+  const crumbs = breadcrumb(route, structure);
 
   return (
     <div className="app">
-      <header>
-        <div className="brand"><span className="logo">&#9673;</span> Wayfinder</div>
-        <input className="repo" placeholder="Absolute path to a Python repo, then press Enter" value={repo} onChange={(e) => setRepo(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
-        <button className="primary" onClick={load} disabled={!repo.trim() || map.loading}>{map.loading ? "Loading..." : "Load"}</button>
-        <nav className="seg">
-          {(["explore", "trace", "ask"] as const).map((m) => (
-            <button key={m} className={mode === m ? "on" : ""} onClick={() => setMode(m)} disabled={!data}>{m === "explore" ? "Explore" : m === "trace" ? "Runtime trace" : "Ask"}</button>
+      <header className="topbar">
+        <button className="brand" onClick={() => setSwitching(true)} title="Open another repo"><Logo /> Wayfinder</button>
+        <nav className="crumbs" aria-label="Where you are">
+          <a className="crumb repo" href="#/" title="Repo overview">{structure.repo}</a>
+          <button className="crumb switch" onClick={() => setSwitching(true)} aria-label="Open another repo" title="Open another repo">⇄</button>
+          {crumbs.map((c) => (
+            <span key={c.label + c.href} className="crumb-wrap"><span className="sep">/</span>{c.href ? <a className="crumb" href={c.href}>{c.label}</a> : <span className="crumb current">{c.label}</span>}</span>
           ))}
         </nav>
+        <button className="search" onClick={() => setPalette(true)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <span>Jump to anything</span><kbd>⌘K</kbd>
+        </button>
+        <nav className="seg modes" aria-label="Mode">
+          <a href="#/" className={route.view !== "ask" ? "on" : ""}>Map</a>
+          <a href="#/ask" className={route.view === "ask" ? "on" : ""}>Ask</a>
+        </nav>
       </header>
-      {map.error && <p className="error pad">{map.error}</p>}
-      {!data && !map.loading && !map.error && (
-        <div className="welcome">
-          <h2>See how a codebase fits together</h2>
-          <p>Load a Python repository to get a map of its files and how they connect. Open any file to see how its functions call each other, with a plain-language explanation.</p>
-        </div>
-      )}
-      {map.loading && <div className="welcome"><div className="spinner" /><p>Reading the repository...</p></div>}
-      {data && (
-        <div className="body">
-          {mode !== "ask" && <Sidebar files={data.files} current={file} onOpen={openFile} onHome={() => { setFile(null); setMode("explore"); }} />}
-          <main>
-            {mode === "explore" && (file ? <FileView key={file} repo={loadedRepo} file={file} onOpenFile={openFile} onBack={() => setFile(null)} /> : <MapView map={data} onOpenFile={openFile} />)}
-            {mode === "trace" && <TraceTab key={loadedRepo} repo={loadedRepo} files={data.files.map((f) => f.path)} initialFile={file} />}
-            {mode === "ask" && <AskTab repo={loadedRepo} />}
-          </main>
-        </div>
-      )}
+      <main className="main">
+        {route.view === "repo" && <Overview structure={structure} purposes={purposes} />}
+        {route.view === "module" && <ModuleView key={route.key} structure={structure} purposes={purposes} moduleKey={route.key} />}
+        {route.view === "file" && <FileView key={route.path} repo={repo} path={route.path} structure={structure} purposes={purposes} onRead={markRead} />}
+        {route.view === "function" && <FunctionView key={route.path + route.name} repo={repo} path={route.path} name={route.name} purposes={purposes} />}
+        {route.view === "ask" && <div className="screen scroll legacy"><AskTab repo={repo} /></div>}
+      </main>
+      {palette && <Palette structure={structure} purposes={purposes} onClose={() => setPalette(false)} />}
     </div>
   );
 }
+
+function breadcrumb(route: Route, s: Structure): { label: string; href?: string }[] {
+  const moduleOf = (path: string) => s.files.find((f) => f.path === path)?.module;
+  const moduleCrumb = (key: string | undefined, last: boolean) => {
+    if (!key || s.mode !== "modules") return [];
+    const name = s.modules.find((m) => m.key === key)?.name ?? key;
+    return [{ label: name, href: last ? undefined : href({ view: "module", key }) }];
+  };
+  switch (route.view) {
+    case "module": return moduleCrumb(route.key, true);
+    case "file": return [...moduleCrumb(moduleOf(route.path), false), { label: baseName(route.path) }];
+    case "function": return [...moduleCrumb(moduleOf(route.path), false), { label: baseName(route.path), href: href({ view: "file", path: route.path }) }, { label: route.name }];
+    case "trace": return [{ label: "Runtime trace" }];
+    case "ask": return [{ label: "Ask" }];
+    default: return [];
+  }
+}
+
+function Welcome({ initial, loading, error, onLoad, onCancel }: { initial: string; loading: boolean; error: string | null; onLoad: (p: string) => void; onCancel?: () => void }) {
+  const [path, setPath] = useState(initial);
+  const past = recent();
+  return (
+    <div className="welcome">
+      <div className="welcome-card">
+        <div className="brand big"><Logo size={26} /> Wayfinder</div>
+        <h1>Understand a codebase you've never seen.</h1>
+        <p className="muted">Point it at a Python repository. You get a map of how it fits together, a reading path, and every file and function explained.</p>
+        <form onSubmit={(e) => { e.preventDefault(); if (path.trim()) onLoad(path.trim()); }} className="welcome-form">
+          <label className="sr-only" htmlFor="repo">Repository path</label>
+          <input id="repo" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/absolute/path/to/a/python/repo" autoFocus />
+          <button className="primary" disabled={!path.trim() || loading}>{loading ? "Reading…" : "Open"}</button>
+        </form>
+        {error && <p className="error">{error}</p>}
+        {past.length > 0 && (
+          <div className="recent">
+            <p className="eyebrow muted-eyebrow">Recent</p>
+            {past.map((p) => <button key={p} className="recent-row" onClick={() => onLoad(p)}><span className="mono">{baseName(p)}</span><span className="muted small ellipsis">{p}</span></button>)}
+          </div>
+        )}
+        {onCancel && <button className="link back" onClick={onCancel}>← Back to {baseName(initial)}</button>}
+      </div>
+    </div>
+  );
+}
+
+function Logo({ size = 18 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#7C7FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5 13 13l-4.5 2.5L11 11z" /></svg>;
+}
+

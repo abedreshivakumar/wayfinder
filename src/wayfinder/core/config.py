@@ -26,8 +26,10 @@ class Limits:
     max_source_chars: int = 6000  # per function, in a prompt
     max_path_source_chars: int = 2500  # per function in a call-chain prompt, which holds several
     max_prompt_chars: int = 30_000  # everything sent to a model in one call
-    max_output_chars: int = 4_000  # what we accept back from a model
-    llm_calls_per_minute: int = 20  # hosted models cost money; this bounds a runaway loop
+    max_output_chars: int = 8_000  # what we accept back from a model (JSON for a whole file's functions needs room)
+    # Just under Gemini's free tier (15 a minute), so Wayfinder waits its turn instead of
+    # being refused by Google; it also bounds a runaway loop.
+    llm_calls_per_minute: int = 14
     max_question_chars: int = 2_000  # a plain-English question to the Orchestrator
     max_turns: int = 8  # tool-using rounds the Orchestrator may take for one question
     max_tool_result_chars: int = 12_000  # what any one tool may hand back to the model
@@ -38,6 +40,8 @@ class Limits:
     max_listed_files: int = 2_000  # Python files listed for the UI's file picker
     max_file_functions: int = 60  # functions analyzed when a whole file is drawn
     max_file_source_chars: int = 12_000  # a file's source in a prompt
+    purpose_source_chars: int = 1_500  # start of each file shown when writing one-line purposes
+    purpose_files_per_call: int = 8
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,8 @@ class Settings:
     # Repos whose source may be sent to an external (hosted) model. Empty means none:
     # code never leaves the machine unless its repo is named here.
     llm_allowed_repos: frozenset[Path] = frozenset()
+    # WAYFINDER_LLM_ALLOWED_REPOS=* : every repo may be sent, a deliberate choice by the owner.
+    llm_allow_all_repos: bool = False
     # A kill switch: while on, no prompt is sent to any hosted model, whatever else is
     # configured. Analysis (which runs locally) and already-cached explanations still work.
     offline: bool = False
@@ -71,10 +77,11 @@ class Settings:
             model=setting("WAYFINDER_MODEL") or DEFAULT_MODEL,
             offline=(setting("WAYFINDER_OFFLINE") or "").lower() in ("1", "true", "yes", "on"),
             allow_trace=(setting("WAYFINDER_ALLOW_TRACE") or "").lower() in ("1", "true", "yes", "on"),
+            llm_allow_all_repos=allowed.strip() == "*",
             llm_allowed_repos=frozenset(
                 Path(p).expanduser().resolve()
                 for p in (part.strip() for part in allowed.split(os.pathsep))
-                if p  # blanks (a trailing ':' or a space after one) are skipped
+                if p and p != "*"  # blanks (a trailing ':' or a space after one) are skipped
             ),
         )
 

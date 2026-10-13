@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 _MAX_FILE_BYTES = 1_000_000  # anything bigger is generated or data, not code worth mapping
-_MAX_NAMES_SHOWN = 6
+_MAX_NAMES_SHOWN = 40  # enough to follow re-exports through a package's __init__.py
 
 
 @dataclass(frozen=True)
@@ -44,16 +44,37 @@ def build_import_graph(repo_root: Path, files: list[str]) -> tuple[list[FileInfo
 
     # Every dotted suffix of a file's module path points at that file, so `import
     # wayfinder.core.config` resolves in a src/ layout, where the folder holding the
-    # package is not part of the name. A suffix shared by two files is dropped.
-    suffixes: dict[str, str | None] = {}
+    # package is not part of the name. A name several files share (two unrelated projects
+    # in the same repo can each have a "config.py") is kept as a list of candidates rather
+    # than being dropped, and resolved per-importer below.
+    suffixes: dict[str, list[str]] = {}
     for r in rels:
         parts = _module_parts(r)
         for i in range(len(parts)):
             dotted = ".".join(parts[i:])
-            suffixes[dotted] = r.as_posix() if dotted not in suffixes else None
+            suffixes.setdefault(dotted, []).append(r.as_posix())
 
-    def lookup(dotted: str) -> str | None:
-        return suffixes.get(dotted)
+    def lookup(dotted: str, importer: str) -> str | None:
+        """Among files sharing this dotted name, the one nearest `importer` - same folder
+        tree first - since an ambiguous plain name almost always means separate projects,
+        not one the importer reaches across."""
+        candidates = suffixes.get(dotted)
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        importer_parts = Path(importer).parts[:-1]
+
+        def shared_depth(c: str) -> int:
+            c_parts = Path(c).parts[:-1]
+            n = 0
+            for a, b in zip(importer_parts, c_parts):
+                if a != b:
+                    break
+                n += 1
+            return n
+
+        return max(candidates, key=lambda c: (shared_depth(c), -len(Path(c).parts)))
 
     def resolve_relative(source: Path, level: int, module: str | None, name: str | None) -> str | None:
         base = source.parent
@@ -107,13 +128,13 @@ def build_import_graph(repo_root: Path, files: list[str]) -> tuple[list[FileInfo
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     dotted = alias.name
-                    while dotted and lookup(dotted) is None:  # `import a.b.c` may only exist as a.b
+                    while dotted and lookup(dotted, src) is None:  # `import a.b.c` may only exist as a.b
                         dotted = dotted.rpartition(".")[0]
-                    add_edge(src, lookup(dotted) if dotted else None, alias.name.rpartition(".")[2])
+                    add_edge(src, lookup(dotted, src) if dotted else None, alias.name.rpartition(".")[2])
             elif isinstance(node, ast.ImportFrom):
                 for alias in node.names:
                     if node.level:
                         add_edge(src, resolve_relative(rel, node.level, node.module, alias.name), alias.name)
                     elif node.module:
-                        add_edge(src, lookup(f"{node.module}.{alias.name}") or lookup(node.module), alias.name)
+                        add_edge(src, lookup(f"{node.module}.{alias.name}", src) or lookup(node.module, src), alias.name)
     return infos, list(edges.values())

@@ -14,7 +14,7 @@ class ModelAccess:
     def __init__(self, settings: Settings, llm: LLM | None = None) -> None:
         self._settings = settings
         self._llm = llm  # None = look for a key when first needed, so analysis works without one
-        self.egress = EgressPolicy(settings.llm_allowed_repos, settings.offline)
+        self.egress = EgressPolicy(settings.llm_allowed_repos, settings.offline, settings.llm_allow_all_repos)
         # One limiter for the life of the service: the limit is over time, not per request.
         self._limiter = SlidingWindowLimiter(settings.limits.llm_calls_per_minute)
 

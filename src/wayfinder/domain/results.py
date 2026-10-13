@@ -97,5 +97,7 @@ class TraceReport:
 @dataclass(frozen=True)
 class FileExplanation:
     file: str  # relative to the repo
-    text: str
+    summary: str  # one sentence: what the file is for
+    steps: list[str]  # how it works, in the order things happen
+    functions: dict[str, str]  # qualified name -> what it does, in a line
     cached: bool  # True when an earlier explanation of identical code and structure was reused

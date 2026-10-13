@@ -16,6 +16,7 @@ from wayfinder.services.explanation import ExplanationService
 from wayfinder.services.model_access import ModelAccess
 from wayfinder.services.orchestration import OrchestrationService
 from wayfinder.services.overview import OverviewService
+from wayfinder.services.purposes import PurposeService
 from wayfinder.services.tracing import TraceService
 from wayfinder.storage.repository import GraphRepository
 
@@ -30,6 +31,7 @@ class Services:
     orchestration: OrchestrationService
     tracing: TraceService
     overview: OverviewService
+    purposes: PurposeService
     pool: DriverPool
     _ctx: ServiceContext
 
@@ -64,6 +66,7 @@ def build_services(
         orchestration=OrchestrationService(ctx, analysis, explanation, drift, access, runner),
         tracing=TraceService(ctx, analysis),
         overview=overview,
+        purposes=PurposeService(ctx, overview, access),
         pool=ctx.pool,
         _ctx=ctx,
     )

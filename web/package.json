@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
     "cytoscape": "^3.34.3",
     "cytoscape-dagre": "^4.0.1",
     "react": "^19.3.0",

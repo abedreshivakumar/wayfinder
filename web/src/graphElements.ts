@@ -48,22 +48,40 @@ export function traceElements(r: TraceReport): ElementDefinition[] {
   return els;
 }
 
-export function mapElements(map: RepoMap, degree: Map<string, number>): ElementDefinition[] {
-  const els: ElementDefinition[] = map.files.map((f) => ({
-    data: {
-      id: f.path,
-      label: baseName(f.path),
-      color: colorFor(dirOf(f.path)),
-      size: 26 + Math.min(44, (degree.get(f.path) ?? 0) * 5),
-    },
-    classes: "file" + (f.error ? " broken" : ""),
-  }));
-  map.edges.forEach((e: ImportEdge) =>
-    els.push({
-      data: { id: `${e.source}>${e.target}`, source: e.source, target: e.target, label: e.names.join(", ") },
-      classes: "import",
-    }),
-  );
+export function mapElements(
+  map: RepoMap,
+  degree: Map<string, number>,
+  opts: { group: boolean } = { group: false },
+): ElementDefinition[] {
+  const groups = new Set<string>();
+  const els: ElementDefinition[] = map.files.map((f) => {
+    const dir = dirOf(f.path);
+    if (opts.group) groups.add(dir);
+    return {
+      data: {
+        id: f.path,
+        label: baseName(f.path),
+        color: colorFor(dir),
+        size: 26 + Math.min(44, (degree.get(f.path) ?? 0) * 5),
+        ...(opts.group ? { parent: `dir:${dir}` } : {}),
+      },
+      classes: "file" + (f.error ? " broken" : ""),
+    };
+  });
+  // Compound nodes: one per folder, holding its files, so the layout clusters them instead
+  // of scattering the whole repo into one tangle.
+  for (const dir of groups) {
+    els.push({ data: { id: `dir:${dir}`, label: dir, color: colorFor(dir) }, classes: "group" });
+  }
+  const paths = new Set(map.files.map((f) => f.path));
+  map.edges.forEach((e: ImportEdge) => {
+    if (paths.has(e.source) && paths.has(e.target)) {
+      els.push({
+        data: { id: `${e.source}>${e.target}`, source: e.source, target: e.target, label: e.names.join(", ") },
+        classes: "import",
+      });
+    }
+  });
   return els;
 }
 

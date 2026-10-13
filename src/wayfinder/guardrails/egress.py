@@ -25,12 +25,15 @@ def refuse_if_offline(offline: bool) -> None:
 
 
 class EgressPolicy:
-    def __init__(self, allowed_repos: frozenset[Path], offline: bool = False) -> None:
+    def __init__(self, allowed_repos: frozenset[Path], offline: bool = False, allow_all: bool = False) -> None:
         self._allowed = allowed_repos
         self._offline = offline
+        self._allow_all = allow_all
 
     def allows(self, file: Path) -> bool:
         """Is `file` inside a repo on the allowlist? (Says nothing about offline mode.)"""
+        if self._allow_all:
+            return True
         resolved = file.resolve()
         return any(resolved.is_relative_to(repo) for repo in self._allowed)
 
