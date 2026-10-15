@@ -15,6 +15,8 @@ optional.
 fetch_user --[user: User]--> process     # the value one call returns, passed into the next
 ```
 
+![Repo overview: folders grouped into entry points, core logic, and data & schemas, each with an AI-written one-line purpose](docs/screenshots/repo-overview.png)
+
 ## Contents
 
 - [Why Wayfinder](#why-wayfinder)
@@ -197,6 +199,13 @@ uv run uvicorn wayfinder.api.main:app       # the server now also serves the UI 
 
 For UI development run `npm run dev` in `web/` (port 5173, forwards `/api` to the server on 8000).
 Runtime tracing additionally needs `WAYFINDER_ALLOW_TRACE=1`.
+
+#### Screenshots
+
+| | |
+|---|---|
+| ![Module view: a folder's files, each with a one-line purpose, the calls between them, and a reading order](docs/screenshots/module-view.png) Module view: a folder's files, with a reading order and what each one is for | ![File view: function cards with one-line purposes and quiet arrows; hovering one shows what it passes](docs/screenshots/file-view-tooltip.png) File view: hover an arrow to see what it passes, without cluttering the graph |
+| ![File view side panel: a numbered, model-written walkthrough of how the file works](docs/screenshots/file-view.png) The side panel: a numbered walkthrough of how the file works, written from the real call graph | ![Function view: inputs, what the function does, and its output, as a small diagram, with real types from static analysis](docs/screenshots/function-view.png) Function view: inputs → what it does → output, with real types - not guessed |
 
 ### HTTP API
 
