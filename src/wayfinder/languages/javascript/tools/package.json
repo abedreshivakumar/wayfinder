@@ -1,0 +1,9 @@
+{
+  "name": "wayfinder-js-analyzer",
+  "private": true,
+  "description": "Parses one JS/TS file and emits its outline and imports as JSON. Run as a subprocess from languages/javascript/*.py - never imported into the web UI build.",
+  "type": "commonjs",
+  "dependencies": {
+    "typescript": "^5.7.3"
+  }
+}

@@ -15,8 +15,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from wayfinder.analysis.imports import FileInfo, ImportEdge, build_import_graph
-from wayfinder.analysis.outline import Outline, outline
+from wayfinder.analysis.imports import FileInfo, ImportEdge
+from wayfinder.analysis.outline import Outline
+from wayfinder.languages import build_import_graph, outline_for
 
 # Files a newcomer skips on a first read. The UI can still show them on request.
 _NOISE = [
@@ -117,10 +118,13 @@ def build_structure(repo_root: Path, paths: list[str]) -> dict[str, Any]:
     for i in infos:
         if i.error:
             continue
+        path = repo_root / i.path
         try:
-            outlines[i.path] = outline((repo_root / i.path).read_text(encoding="utf-8", errors="replace"))
+            found = outline_for(path, path.read_text(encoding="utf-8", errors="replace"))
         except (OSError, SyntaxError, ValueError):
-            pass
+            found = None
+        if found is not None:
+            outlines[i.path] = found
 
     core = [i.path for i in infos if not is_noise(i.path) and not i.error]
     core_set = set(core)

@@ -15,4 +15,5 @@ wheels/
 
 web/node_modules/
 web/dist/
+src/wayfinder/languages/javascript/tools/node_modules/
 .DS_Store

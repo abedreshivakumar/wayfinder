@@ -10,7 +10,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from wayfinder.analysis.imports import FileInfo, ImportEdge
+    from wayfinder.analysis.outline import Outline
 
 
 class LanguageDriver(Protocol):
@@ -32,6 +36,15 @@ class Language:
     extensions: frozenset[str]  # {".py"}
     skipped_dirs: frozenset[str]  # folder names never worth walking into for this language
     make_driver: Callable[[Path], LanguageDriver]  # repo_root -> a started-on-demand driver
+    # (file path, source text) -> what that one file defines - functions, classes, schemas.
+    # The path matters here (unlike for pyright/tsserver, which only ever see real files on
+    # disk): a JS/TS implementation needs the extension to know whether to parse the file
+    # as .ts, .tsx, .js or .jsx.
+    outline: Callable[[Path, str], "Outline"]
+    # (repo root, every file in the repo this language owns) -> which of those files import
+    # which. Only ever called with files this language's own `extensions` matched, so an
+    # implementation never has to recognize another language's import syntax.
+    build_imports: Callable[[Path, list[str]], tuple[list["FileInfo"], list["ImportEdge"]]]
 
 
 _REGISTRY: dict[str, Language] = {}
@@ -67,3 +80,33 @@ def for_file(path: Path) -> Language | None:
         if path.suffix in language.extensions:
             return language
     return None
+
+
+def outline_for(path: Path, source: str) -> "Outline | None":
+    """`path`'s language's outline of it, or None if no registered language claims it (the
+    file is then skipped rather than failing the whole repo's analysis)."""
+    language = for_file(path)
+    return None if language is None else language.outline(path, source)
+
+
+def build_import_graph(repo_root: Path, files: list[str]) -> tuple[list["FileInfo"], list["ImportEdge"]]:
+    """Every file's import info and the edges between them, across every registered
+    language at once - each file goes to the language that owns its extension, so a mixed
+    Python + JS repo gets both analyzed, just never cross-linked to each other (a Python
+    file importing a JS one isn't a real thing to resolve)."""
+    by_language: dict[str, list[str]] = {}
+    for f in files:
+        language = for_file(Path(f))
+        if language is not None:
+            by_language.setdefault(language.id, []).append(f)
+
+    infos: list[FileInfo] = []
+    edges: list[ImportEdge] = []
+    for language in _REGISTRY.values():
+        language_files = by_language.get(language.id, [])
+        if not language_files:
+            continue
+        language_infos, language_edges = language.build_imports(repo_root, language_files)
+        infos += language_infos
+        edges += language_edges
+    return infos, edges

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from wayfinder.agents.llm import LLM
 from wayfinder.agents.orchestrator import AgentRunner
 from wayfinder.core.config import Settings
+from wayfinder.languages import javascript as _javascript  # noqa: F401 - importing registers it
 from wayfinder.languages import python as _python  # noqa: F401 - importing registers it
 from wayfinder.services.analysis import AnalysisService
 from wayfinder.services.context import ServiceContext

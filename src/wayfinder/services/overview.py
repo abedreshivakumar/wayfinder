@@ -11,9 +11,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from wayfinder.analysis.imports import build_import_graph
-from wayfinder.analysis.outline import outline
 from wayfinder.analysis.structure import build_structure
+from wayfinder.languages import build_import_graph, outline_for
 from wayfinder.core.errors import WayfinderError
 from wayfinder.guardrails import inputs
 from wayfinder.services.analysis import AnalysisService
@@ -108,7 +107,7 @@ class OverviewService:
                     links.append(f)
 
         try:
-            info = outline(file_path.read_text(encoding="utf-8", errors="replace"))
+            info = outline_for(file_path, file_path.read_text(encoding="utf-8", errors="replace"))
         except (OSError, SyntaxError, ValueError):
             info = None
         if info:
