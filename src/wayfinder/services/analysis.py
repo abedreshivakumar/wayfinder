@@ -11,11 +11,9 @@ from wayfinder.domain.graph import Direction
 from wayfinder.domain.labels import DataFlowGraph
 from wayfinder.guardrails import inputs
 from wayfinder.domain.results import SymbolMatch
+from wayfinder.languages import all_extensions, all_skipped_dirs
 from wayfinder.lsp.symbols import find_symbols, list_symbols
 from wayfinder.services.context import ServiceContext
-
-
-_SKIPPED_DIRS = {"node_modules", "__pycache__", "venv", "env", "build", "dist", "site-packages"}
 
 
 class AnalysisService:
@@ -44,7 +42,7 @@ class AnalysisService:
         repo_root, file_path = inputs.resolve_file(repo, file)
 
         with ctx.lock:
-            driver = ctx.pool.get(repo_root)
+            driver = ctx.pool.get(repo_root, file_path)
             if symbol is not None:
                 matches = find_symbols(driver, file_path, symbol)
                 if not matches:
@@ -64,15 +62,17 @@ class AnalysisService:
             return ctx.store.get_dataflow_graph(graph.root_id, hops, direction)
 
     def list_files(self, repo: str) -> list[str]:
-        """The Python files in a repo, relative to it, for the UI's file picker. Skips
-        hidden folders, virtual environments and build output."""
+        """Every file in a repo whose extension a registered language claims, relative to
+        the repo root. Skips hidden folders, virtual environments and build output."""
         repo_root = inputs.resolve_repo(repo)
         cap = self._ctx.settings.limits.max_listed_files
+        extensions = all_extensions()
+        skipped = all_skipped_dirs()
         found: list[str] = []
         for folder, dirs, files in os.walk(repo_root):
-            dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in _SKIPPED_DIRS)
+            dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in skipped)
             for name in sorted(files):
-                if name.endswith(".py"):
+                if os.path.splitext(name)[1] in extensions:
                     found.append(os.path.relpath(os.path.join(folder, name), repo_root))
                     if len(found) >= cap:
                         return found
@@ -82,4 +82,4 @@ class AnalysisService:
         """The functions, methods and classes in one file."""
         repo_root, file_path = inputs.resolve_file(repo, file)
         with self._ctx.lock:
-            return list_symbols(self._ctx.pool.get(repo_root), file_path)
+            return list_symbols(self._ctx.pool.get(repo_root, file_path), file_path)

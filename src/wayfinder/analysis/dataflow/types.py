@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from wayfinder.lsp.pyright_driver import PyrightDriver
+from wayfinder.languages import LanguageDriver
 
 _FENCE = re.compile(r"```python\n(.*?)\n```", re.DOTALL)
 _VARIABLE = re.compile(r"^\((variable|parameter|constant)\) (\w+): (.+)$")
@@ -51,6 +51,6 @@ def parse_hover(markdown: str | None) -> HoverInfo | None:
     return None
 
 
-def resolve_type(driver: PyrightDriver, file: Path, line: int, col: int) -> HoverInfo | None:
+def resolve_type(driver: LanguageDriver, file: Path, line: int, col: int) -> HoverInfo | None:
     """line, col are 1-indexed. Ask pyright what's at this position, parsed."""
     return parse_hover(driver.hover(file, line, col))

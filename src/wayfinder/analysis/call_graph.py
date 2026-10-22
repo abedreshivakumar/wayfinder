@@ -11,7 +11,7 @@ from typing import Any
 
 from wayfinder.domain.graph import Edge, Graph, Node
 from wayfinder.lsp.position import from_lsp_position
-from wayfinder.lsp.pyright_driver import PyrightDriver
+from wayfinder.languages import LanguageDriver
 
 
 def _node_id(item: dict[str, Any]) -> str:
@@ -39,7 +39,7 @@ def _item_to_node(item: dict[str, Any]) -> Node:
     )
 
 
-def build_call_graph(driver: PyrightDriver, file: Path, line: int, col: int, hops: int = 2) -> Graph:
+def build_call_graph(driver: LanguageDriver, file: Path, line: int, col: int, hops: int = 2) -> Graph:
     """line, col are 1-indexed. Expands `hops` levels out in both directions
     from the symbol at that position."""
     start_item = driver.prepare_call_hierarchy(file, line, col)

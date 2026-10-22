@@ -12,14 +12,14 @@ from typing import Any
 
 from wayfinder.domain.results import SymbolMatch
 from wayfinder.lsp.position import from_lsp_position
-from wayfinder.lsp.pyright_driver import PyrightDriver
+from wayfinder.languages import LanguageDriver
 
 # LSP SymbolKind values for things that can be called: Class(5) is included because
 # instantiating a class is a call, Constructor(9) for completeness.
 _CALLABLE_KINDS = {5, 6, 9, 12}  # Class, Method, Constructor, Function
 
 
-def find_symbols(driver: PyrightDriver, file: Path, query: str) -> list[SymbolMatch]:
+def find_symbols(driver: LanguageDriver, file: Path, query: str) -> list[SymbolMatch]:
     """Callable symbols in `file` matching `query`.
 
     `query` is a plain name ("fetch_user") or a dotted path
@@ -41,7 +41,7 @@ def find_symbols(driver: PyrightDriver, file: Path, query: str) -> list[SymbolMa
     return found
 
 
-def list_symbols(driver: PyrightDriver, file: Path) -> list[SymbolMatch]:
+def list_symbols(driver: LanguageDriver, file: Path) -> list[SymbolMatch]:
     """Every callable symbol in `file`, in file order, for picking one from a list."""
     found: list[SymbolMatch] = []
 

@@ -20,7 +20,7 @@ from wayfinder.analysis.dataflow.thread import thread_variables
 from wayfinder.analysis.dataflow.types import HoverInfo, resolve_type
 from wayfinder.domain.graph import Graph
 from wayfinder.domain.labels import ArgLabel, CallLabel, DataFlowGraph, FlowLink
-from wayfinder.lsp.pyright_driver import PyrightDriver
+from wayfinder.languages import LanguageDriver
 
 _COROUTINE = re.compile(r"^Coroutine(?:Type)?\[.+?,\s*.+?,\s*(.+)\]$")
 
@@ -35,7 +35,7 @@ def _unwrap_coroutine(type_: str) -> str:
 class _Lookups:
     """Per-analysis caches: each position is hovered once, each file parsed once."""
 
-    def __init__(self, driver: PyrightDriver) -> None:
+    def __init__(self, driver: LanguageDriver) -> None:
         self._driver = driver
         self._hovers: dict[tuple[Path, Pos], HoverInfo | None] = {}
         self._sites: dict[Path, list[CallSite]] = {}
@@ -117,7 +117,7 @@ def _flow_links(graph: Graph, look: _Lookups) -> list[FlowLink]:
     return links
 
 
-def annotate_graph(graph: Graph, driver: PyrightDriver) -> DataFlowGraph:
+def annotate_graph(graph: Graph, driver: LanguageDriver) -> DataFlowGraph:
     look = _Lookups(driver)
     return DataFlowGraph(
         graph=graph,
