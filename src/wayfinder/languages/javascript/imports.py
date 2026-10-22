@@ -19,24 +19,44 @@ _CANDIDATE_EXTENSIONS = (".ts", ".tsx", ".d.ts", ".js", ".jsx")
 _INDEX_FILES = tuple(f"index{ext}" for ext in _CANDIDATE_EXTENSIONS)
 
 
-def _read_path_aliases(repo_root: Path) -> dict[str, list[str]]:
-    """`compilerOptions.paths` from the repo's own `tsconfig.json`, resolved against its
+_TSCONFIG_SKIP = {"node_modules", "vendor", "dist", "build", ".next", "coverage", ".turbo"}
+
+
+def _aliases_from(tsconfig: Path, repo_root: Path) -> dict[str, list[str]]:
+    """`compilerOptions.paths` from one `tsconfig.json`, resolved against its own
     `baseUrl` - `{"@app/*": ["src/app/*"]}` becomes `{"@app/": ["src/app/"]}`. Missing,
     malformed, or using project-reference `extends` chains: treated as no aliases - those
     imports just end up external instead, same as a package Wayfinder doesn't resolve."""
-    tsconfig = repo_root / "tsconfig.json"
-    if not tsconfig.is_file():
-        return {}
     try:
         options = json.loads(tsconfig.read_text(encoding="utf-8", errors="replace")).get("compilerOptions", {})
     except ValueError:
         return {}
-    base = (repo_root / options.get("baseUrl", ".")).resolve()
+    base = (tsconfig.parent / options.get("baseUrl", ".")).resolve()
     out: dict[str, list[str]] = {}
     for pattern, targets in (options.get("paths") or {}).items():
         key = pattern.removesuffix("*")
-        out[key] = [str((base / t.removesuffix("*")).relative_to(repo_root)) for t in targets if isinstance(t, str)]
+        resolved = [(base / t.removesuffix("*")) for t in targets if isinstance(t, str)]
+        out[key] = [str(r.relative_to(repo_root)) for r in resolved if r.is_relative_to(repo_root)]
     return out
+
+
+def _find_tsconfigs(repo_root: Path) -> dict[Path, dict[str, list[str]]]:
+    """Every `tsconfig.json` in the repo, each with its own path aliases - a monorepo
+    commonly has one per package (`plugins/memory/tsconfig.json`, not just one at the
+    root), and each package's imports should resolve against its own, nearest one."""
+    out: dict[Path, dict[str, list[str]]] = {}
+    for tsconfig in repo_root.rglob("tsconfig.json"):
+        if any(part in _TSCONFIG_SKIP for part in tsconfig.relative_to(repo_root).parts):
+            continue
+        out[tsconfig.parent] = _aliases_from(tsconfig, repo_root)
+    return out
+
+
+def _nearest_aliases(from_file: Path, by_dir: dict[Path, dict[str, list[str]]]) -> dict[str, list[str]]:
+    for folder in (from_file.parent, *from_file.parent.parents):
+        if folder in by_dir:
+            return by_dir[folder]
+    return {}
 
 
 def _resolve(specifier: str, from_file: Path, repo_root: Path, aliases: dict[str, list[str]], by_path: set[str]) -> str | None:
@@ -49,7 +69,13 @@ def _resolve(specifier: str, from_file: Path, repo_root: Path, aliases: dict[str
         rest = specifier[len(next(p for p in aliases if specifier.startswith(p))):]
         base = (repo_root / target_dirs[0] / rest).resolve()
 
-    for candidate in (base, *(base.with_suffix(base.suffix + ext) for ext in _CANDIDATE_EXTENSIONS), *(base / name for name in _INDEX_FILES)):
+    # `./foo` (no extension) and `./foo.js` (the standard ESM convention of writing the
+    # compiled .js extension even in a .ts source file, so the real file is `foo.ts`) both
+    # need every candidate extension tried against the extensionless stem - `base.with_suffix`
+    # REPLACES an existing suffix, so naively appending onto ".js" produced "foo.js.ts" and
+    # never matched anything.
+    stem = base.with_suffix("") if base.suffix in _CANDIDATE_EXTENSIONS else base
+    for candidate in (base, *(stem.with_suffix(ext) for ext in _CANDIDATE_EXTENSIONS), *(base / name for name in _INDEX_FILES)):
         try:
             rel = candidate.relative_to(repo_root).as_posix()
         except ValueError:
@@ -62,7 +88,7 @@ def _resolve(specifier: str, from_file: Path, repo_root: Path, aliases: dict[str
 def build_import_graph(repo_root: Path, files: list[str]) -> tuple[list[FileInfo], list[ImportEdge]]:
     rels = [Path(f) for f in files]
     by_path = {r.as_posix() for r in rels}
-    aliases = _read_path_aliases(repo_root)
+    tsconfigs = _find_tsconfigs(repo_root)
 
     infos: list[FileInfo] = []
     edges: dict[tuple[str, str], ImportEdge] = {}
@@ -94,6 +120,7 @@ def build_import_graph(repo_root: Path, files: list[str]) -> tuple[list[FileInfo
             )
         )
         src = rel.as_posix()
+        aliases = _nearest_aliases(full, tsconfigs)
         for record in data["imports"]:
             target = _resolve(record["specifier"], full, repo_root, aliases, by_path)
             add_edge(src, target, record["names"])

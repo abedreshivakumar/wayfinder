@@ -159,6 +159,17 @@ function main() {
           }
         }
         imports.push({ specifier: node.moduleSpecifier.text, names });
+      } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        // export { a, b } from "./foo" and export * from "./foo" - a re-export is still a
+        // real dependency on that file (the common "barrel file" pattern), the same way
+        // Wayfinder already follows a Python __init__.py's re-exports to the real definer.
+        const names = [];
+        if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+          for (const el of node.exportClause.elements) names.push(el.name.text);
+        } else {
+          names.push("*"); // export * from "./foo"
+        }
+        imports.push({ specifier: node.moduleSpecifier.text, names });
       } else if (ts.isIfStatement(node) && /require\.main\s*===\s*module/.test(node.expression.getText(source))) {
         hasMainGuard = true;
       } else if (ts.isModuleDeclaration(node) && node.body && ts.isModuleBlock(node.body)) {

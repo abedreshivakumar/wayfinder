@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { api, type Purposes, type Structure } from "./api";
 import { AskTab } from "./AskTab";
 import { baseName } from "./format";
@@ -12,7 +12,18 @@ import { Overview } from "./views/Overview";
 
 const RECENT = "wayfinder.recent";
 const recent = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT) ?? "[]"); } catch { return []; } };
-const remember = (repo: string) => { try { localStorage.setItem(RECENT, JSON.stringify([repo, ...recent().filter((r) => r !== repo)].slice(0, 5))); } catch { /* convenience only */ } };
+const remember = (repo: string) => { try { localStorage.setItem(RECENT, JSON.stringify([repo, ...recent().filter((r) => r !== repo)].slice(0, 8))); } catch { /* convenience only */ } };
+const forgetOne = (repo: string) => { try { localStorage.setItem(RECENT, JSON.stringify(recent().filter((r) => r !== repo))); } catch { /* best effort */ } };
+const forgetAll = () => { try { localStorage.removeItem(RECENT); } catch { /* best effort */ } };
+
+// Shows a user folder as ~/... instead of the full /Users/<name>/... path, so the history
+// list (which lives in this browser only, but is still visible on your screen to anyone
+// looking at it) doesn't spell out your account name or a client's folder structure by
+// default - the full path is still one hover away, in the title attribute.
+function maskPath(p: string): string {
+  const m = p.match(/^(\/(?:Users|home)\/[^/]+)(\/.*)?$/);
+  return m ? `~${m[2] ?? ""}` : p;
+}
 
 export default function App() {
   const route = useRoute();
@@ -104,28 +115,92 @@ function breadcrumb(route: Route, s: Structure): { label: string; href?: string 
 
 function Welcome({ initial, loading, error, onLoad, onCancel }: { initial: string; loading: boolean; error: string | null; onLoad: (p: string) => void; onCancel?: () => void }) {
   const [path, setPath] = useState(initial);
-  const past = recent();
+  const [past, setPast] = useState(recent);
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const remove = (p: string, e: MouseEvent) => {
+    e.stopPropagation();
+    forgetOne(p);
+    setPast(recent());
+  };
+  const clearAll = () => {
+    forgetAll();
+    setPast([]);
+    setConfirmClear(false);
+  };
+
   return (
     <div className="welcome">
-      <div className="welcome-card">
-        <div className="brand big"><Logo size={26} /> Wayfinder</div>
-        <h1>Understand a codebase you've never seen.</h1>
-        <p className="muted">Point it at a Python, JavaScript or TypeScript repository. You get a map of how it fits together, a reading order, and every file and function explained.</p>
-        <form onSubmit={(e) => { e.preventDefault(); if (path.trim()) onLoad(path.trim()); }} className="welcome-form">
-          <label className="sr-only" htmlFor="repo">Repository path</label>
-          <input id="repo" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/absolute/path/to/a/python/repo" autoFocus />
-          <button className="primary" disabled={!path.trim() || loading}>{loading ? "Reading…" : "Open"}</button>
-        </form>
-        {error && <p className="error">{error}</p>}
-        {past.length > 0 && (
-          <div className="recent">
-            <p className="eyebrow muted-eyebrow">Recent</p>
-            {past.map((p) => <button key={p} className="recent-row" onClick={() => onLoad(p)}><span className="mono">{baseName(p)}</span><span className="muted small ellipsis">{p}</span></button>)}
+      <div className="welcome-grid">
+        <div className="welcome-card">
+          <div className="brand big"><Logo size={26} /> Wayfinder</div>
+          <h1>See how a codebase <span className="accent-text">really</span> fits together.</h1>
+          <p className="muted">Point it at a Python, JavaScript or TypeScript repository. You get a map of its modules, how data flows between functions, and a plain-English walkthrough of every file — grounded in real static analysis, not a guess.</p>
+          <div className="pills">
+            <span className="pill"><i className="dot layer-entry" />Call graph</span>
+            <span className="pill"><i className="dot layer-core" />Data flow</span>
+            <span className="pill"><i className="dot layer-data" />AI explanations</span>
+            <span className="pill lock"><LockIcon /> Runs locally</span>
           </div>
-        )}
-        {onCancel && <button className="link back" onClick={onCancel}>← Back to {baseName(initial)}</button>}
+          <form onSubmit={(e) => { e.preventDefault(); if (path.trim()) onLoad(path.trim()); }} className="welcome-form">
+            <label className="sr-only" htmlFor="repo">Repository path</label>
+            <input id="repo" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/absolute/path/to/a/python/repo" autoFocus />
+            <button className="primary" disabled={!path.trim() || loading}>{loading ? "Reading…" : "Open"}</button>
+          </form>
+          {error && <p className="error">{error}</p>}
+
+          {past.length > 0 && (
+            <div className="recent">
+              <div className="recent-head">
+                <p className="eyebrow muted-eyebrow">Recent — kept only in this browser</p>
+                {confirmClear
+                  ? <span className="confirm-clear"><span className="muted small">Clear all?</span><button className="link" onClick={clearAll}>Yes</button><button className="link" onClick={() => setConfirmClear(false)}>No</button></span>
+                  : <button className="link small" onClick={() => setConfirmClear(true)}>Clear</button>}
+              </div>
+              {past.map((p) => (
+                <div key={p} className="recent-row" onClick={() => onLoad(p)} title={p} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onLoad(p)}>
+                  <span className="mono">{baseName(p)}</span>
+                  <span className="muted small ellipsis">{maskPath(p)}</span>
+                  <button className="recent-remove" title="Remove from history" aria-label={`Remove ${baseName(p)} from history`} onClick={(e) => remove(p, e)}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {onCancel && <button className="link back" onClick={onCancel}>← Back to {baseName(initial)}</button>}
+        </div>
+        <WelcomeGraphic />
       </div>
     </div>
+  );
+}
+
+function LockIcon() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>;
+}
+
+// A decorative, non-interactive preview of the real graph view - three layer bands with a
+// few nodes and connecting lines, built from the same colour tokens the app itself uses.
+// Purely visual: it teases what the tool actually draws, instead of the welcome screen
+// being a bare form on an empty gradient.
+function WelcomeGraphic() {
+  return (
+    <svg className="welcome-graphic" viewBox="0 0 420 440" fill="none" aria-hidden="true">
+      <rect x="20" y="16" width="380" height="110" rx="16" className="wg-band wg-entry" />
+      <rect x="20" y="158" width="380" height="140" rx="16" className="wg-band wg-core" />
+      <rect x="20" y="330" width="380" height="94" rx="16" className="wg-band wg-data" />
+      <path d="M120 86 L120 180" className="wg-edge wg-e1" />
+      <path d="M300 86 L220 200" className="wg-edge wg-e2" />
+      <path d="M160 228 L300 228" className="wg-edge wg-e3" />
+      <path d="M160 266 L120 360" className="wg-edge wg-e4" />
+      <path d="M280 266 L300 360" className="wg-edge wg-e5" />
+      <rect x="76" y="48" width="88" height="40" rx="9" className="wg-node wg-entry-n" />
+      <rect x="256" y="48" width="88" height="40" rx="9" className="wg-node wg-entry-n" />
+      <rect x="76" y="192" width="88" height="40" rx="9" className="wg-node wg-core-n wg-focus" />
+      <rect x="236" y="192" width="88" height="40" rx="9" className="wg-node wg-core-n" />
+      <rect x="156" y="252" width="88" height="40" rx="9" className="wg-node wg-core-n" />
+      <rect x="76" y="364" width="88" height="40" rx="9" className="wg-node wg-data-n" />
+      <rect x="256" y="364" width="88" height="40" rx="9" className="wg-node wg-data-n" />
+    </svg>
   );
 }
 

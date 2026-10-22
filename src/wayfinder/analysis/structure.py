@@ -28,8 +28,19 @@ _NOISE = [
         r"(^|/)setup\.py$", r"(^|/)conf\.py$", r"(^|/)noxfile\.py$",
     )
 ]
-_ENTRY_NAMES = {"main.py", "__main__.py", "cli.py", "app.py", "server.py", "manage.py", "wsgi.py", "asgi.py", "run.py"}
-_DATA_NAMES = {"schema.py", "schemas.py", "models.py", "model.py", "types.py", "dto.py", "entities.py", "domain.py"}
+_ENTRY_NAMES = {
+    "main.py", "__main__.py", "cli.py", "app.py", "server.py", "manage.py", "wsgi.py", "asgi.py", "run.py",
+    # JS/TS: has_main_guard (require.main === module) rarely fires in modern ESM code, so
+    # these conventional entry filenames carry more of the signal than they do for Python.
+    # Deliberately NOT index.ts/index.js: that name means "this package's public API" (a
+    # barrel file), not "where the program starts" - classifying it by name alone would
+    # misfire on nearly every package in a JS repo.
+    "main.ts", "main.js", "cli.ts", "cli.js", "app.ts", "app.js", "server.ts", "server.js",
+}
+_DATA_NAMES = {
+    "schema.py", "schemas.py", "models.py", "model.py", "types.py", "dto.py", "entities.py", "domain.py",
+    "schema.ts", "schemas.ts", "models.ts", "model.ts", "types.ts", "dto.ts", "entities.ts", "domain.ts",
+}
 _TINY_REPO = 6  # this many core files or fewer: show files, not modules
 _READING_PATH = 8
 

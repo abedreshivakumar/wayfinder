@@ -13,7 +13,10 @@ from wayfinder.lsp.tsserver_driver import TSServerDriver
 JAVASCRIPT = Language(
     id="javascript",
     extensions=frozenset({".js", ".jsx", ".ts", ".tsx"}),
-    skipped_dirs=frozenset({"node_modules", "dist", "build", ".next", "coverage", ".turbo"}),
+    # "vendor" is a recognized convention for a vendored copy of third-party source (Go,
+    # Composer, and some Node projects all use it the same way) - not this repo's own code,
+    # same reasoning as excluding node_modules.
+    skipped_dirs=frozenset({"node_modules", "dist", "build", ".next", "coverage", ".turbo", "vendor"}),
     make_driver=TSServerDriver,
     outline=outline,
     build_imports=build_import_graph,

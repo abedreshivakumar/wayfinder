@@ -18,13 +18,34 @@ from wayfinder.core.errors import UpstreamError
 
 _SCRIPT = Path(__file__).with_name("tools") / "analyze.js"
 _TIMEOUT_SECONDS = 15
+_CACHE_LIMIT = 2_000  # files; oldest dropped first, so a long-lived server doesn't grow forever
+
+# Keyed by (path, mtime_ns): both outline() and imports.py's build_import_graph() need this
+# same per-file result for the same `structure()` call, and re-asking Node to parse a file
+# that hasn't changed since the last ask is pure waste - one Node subprocess per file per
+# load instead of two was the actual cause of the JS/TS lag on first opening a repo.
+_cache: dict[tuple[str, int], dict] = {}
 
 
 def analyze(path: Path, source: str) -> dict:
     """The analyzer's full parsed JSON - functions, classes, schemas, imports,
     has_main_guard - for callers (namely `imports.py`) that need more than one view of it,
-    so a file is only ever parsed once."""
-    return _run(path, source)
+    so a file already parsed this run, unchanged on disk, is never parsed twice."""
+    try:
+        key = (str(path), path.stat().st_mtime_ns)
+    except OSError:
+        key = None  # file doesn't exist yet (the no-real-file branch below); never cached
+
+    if key is not None and key in _cache:
+        return _cache[key]
+
+    result = _run(path, source)
+
+    if key is not None:
+        if len(_cache) >= _CACHE_LIMIT:
+            _cache.pop(next(iter(_cache)))  # drop the oldest entry (dicts keep insertion order)
+        _cache[key] = result
+    return result
 
 
 def _run(path: Path, source: str) -> dict:

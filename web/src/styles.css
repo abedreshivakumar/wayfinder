@@ -233,18 +233,52 @@ button:disabled { opacity: .5; cursor: default; }
 .palette-foot { display: flex; gap: 18px; padding: 11px 18px; border-top: 1px solid #22222b; color: var(--faint); font-size: 12px; }
 
 /* welcome */
-.welcome { height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px;
-  background: radial-gradient(ellipse at 50% -20%, rgba(124, 127, 255, .14), transparent 60%), var(--bg); }
-.welcome-card { width: min(620px, 100%); display: flex; flex-direction: column; gap: 16px; }
-.welcome-card h1 { font-size: 38px; line-height: 44px; margin-top: 18px; }
-.welcome-card > .muted { font-size: 16px; line-height: 24px; }
-.welcome-form { display: flex; gap: 10px; margin-top: 8px; }
+.welcome { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 48px 24px; overflow: auto;
+  background:
+    radial-gradient(ellipse at 15% -10%, rgba(124, 127, 255, .16), transparent 55%),
+    radial-gradient(ellipse at 90% 10%, rgba(61, 214, 198, .1), transparent 50%),
+    radial-gradient(circle at 1px 1px, #16161d 1px, transparent 0) 0 0 / 28px 28px,
+    var(--bg); }
+.welcome-grid { width: min(1040px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 56px; align-items: center; }
+.welcome-card { display: flex; flex-direction: column; gap: 16px; }
+.welcome-card h1 { font-size: 40px; line-height: 46px; margin-top: 18px; letter-spacing: -.015em; }
+.welcome-card > .muted { font-size: 16px; line-height: 25px; max-width: 48ch; }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px 5px 10px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line-2); font-size: 12.5px; color: var(--text-2); }
+.pill .dot { width: 7px; height: 7px; }
+.pill.lock { color: var(--faint); }
+.welcome-form { display: flex; gap: 10px; margin-top: 10px; }
 .welcome-form input { flex: 1; height: 46px; padding: 0 14px; border-radius: 12px; background: #131318; border: 1px solid var(--line-3); color: var(--text); font-family: var(--mono); font-size: 13.5px; }
 .welcome-form input:focus { outline: none; border-color: var(--entry); box-shadow: 0 0 0 4px var(--entry-soft); }
 .welcome-form .primary { height: 46px; padding: 0 22px; }
-.recent { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
-.recent-row { display: flex; gap: 12px; align-items: baseline; padding: 9px 12px; border-radius: 10px; border: 1px solid transparent; background: none; text-align: left; color: var(--text); }
+.recent { margin-top: 14px; display: flex; flex-direction: column; gap: 4px; }
+.recent-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+.recent-head .eyebrow { margin: 0; }
+.confirm-clear { display: flex; align-items: center; gap: 8px; }
+.recent-row { display: flex; gap: 12px; align-items: center; padding: 9px 10px 9px 12px; border-radius: 10px; border: 1px solid transparent; background: none; text-align: left; color: var(--text); cursor: pointer; }
 .recent-row:hover { background: #14141b; border-color: var(--line-2); }
+.recent-row:hover .recent-remove { opacity: 1; }
+.recent-remove { margin-left: auto; width: 22px; height: 22px; flex: none; padding: 0; border-radius: 6px; border: none; background: none; color: var(--faint); font-size: 16px; line-height: 1; opacity: 0; }
+.recent-remove:hover { background: var(--raised); color: var(--bad); opacity: 1; }
+
+.welcome-graphic { width: 100%; height: auto; display: none; }
+@media (min-width: 880px) { .welcome-graphic { display: block; } .welcome-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 420px); } }
+@media (max-width: 879px) { .welcome-grid { grid-template-columns: 1fr; } }
+.wg-band { stroke-width: 1.5; fill-opacity: .05; }
+.wg-entry { fill: var(--entry); stroke: var(--entry); stroke-opacity: .3; }
+.wg-core { fill: var(--core); stroke: var(--core); stroke-opacity: .3; }
+.wg-data { fill: var(--data); stroke: var(--data); stroke-opacity: .3; }
+.wg-edge { stroke: var(--line-3); stroke-width: 1.5; fill: none; }
+.wg-e1, .wg-e2 { animation: wg-flow 3.2s linear infinite; }
+.wg-e3 { animation: wg-flow 3.2s linear infinite .4s; }
+.wg-e4, .wg-e5 { animation: wg-flow 3.2s linear infinite .8s; }
+.wg-edge { stroke-dasharray: 5 5; }
+@keyframes wg-flow { to { stroke-dashoffset: -20; } }
+.wg-node { fill: var(--card); stroke: var(--line-2); stroke-width: 1.5; }
+.wg-entry-n { stroke: var(--entry); }
+.wg-core-n { stroke: var(--core); }
+.wg-data-n { stroke: var(--data); }
+.wg-focus { fill: var(--entry-soft); stroke-width: 2; }
 
 /* trace and ask keep their simpler layout */
 .legacy { padding: 0; }
