@@ -5,6 +5,7 @@ description = "Explain unfamiliar Python code: call graphs, data flow, and plain
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=1.0.0",
     "claude-agent-sdk>=0.2.159",
     "fastapi>=0.141.1",
     "mcp>=2.2.0",

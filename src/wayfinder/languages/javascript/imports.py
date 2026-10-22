@@ -8,6 +8,7 @@ an import it can't find among the repo's own files.
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from wayfinder.analysis.imports import FileInfo, ImportEdge
@@ -17,6 +18,9 @@ _MAX_FILE_BYTES = 1_000_000
 _MAX_NAMES_SHOWN = 40
 _CANDIDATE_EXTENSIONS = (".ts", ".tsx", ".d.ts", ".js", ".jsx")
 _INDEX_FILES = tuple(f"index{ext}" for ext in _CANDIDATE_EXTENSIONS)
+_MAX_WORKERS = 8  # each analyze() spawns a Node process to load the TS compiler - the
+# dominant per-file cost - so parsing several files at once turns a repo's total parse time
+# from "every file's cost added up" into roughly "the slowest file's cost".
 
 
 _TSCONFIG_SKIP = {"node_modules", "vendor", "dist", "build", ".next", "coverage", ".turbo"}
@@ -85,10 +89,30 @@ def _resolve(specifier: str, from_file: Path, repo_root: Path, aliases: dict[str
     return None
 
 
+def _parse_one(repo_root: Path, rel: Path) -> tuple[str | None, dict | None, str | None]:
+    """(text, parsed data, error) for one file - the part worth running off the main thread,
+    since `analyze()` here is a blocking Node subprocess call."""
+    full = repo_root / rel
+    try:
+        if full.stat().st_size > _MAX_FILE_BYTES:
+            return None, None, "file too large to map"
+        text = full.read_text(encoding="utf-8", errors="replace")
+        data = analyze(full, text)
+    except (OSError, ValueError) as e:
+        return None, None, f"could not parse: {type(e).__name__}"
+    return text, data, None
+
+
 def build_import_graph(repo_root: Path, files: list[str]) -> tuple[list[FileInfo], list[ImportEdge]]:
     rels = [Path(f) for f in files]
     by_path = {r.as_posix() for r in rels}
     tsconfigs = _find_tsconfigs(repo_root)
+
+    # The slow part - one Node subprocess per file - runs for every file at once instead of
+    # one at a time; `map` keeps the results in the same order as `rels` regardless of which
+    # subprocess finishes first, so everything below stays deterministic.
+    with ThreadPoolExecutor(max_workers=min(_MAX_WORKERS, len(rels)) or 1) as pool:
+        parsed = list(pool.map(lambda rel: _parse_one(repo_root, rel), rels))
 
     infos: list[FileInfo] = []
     edges: dict[tuple[str, str], ImportEdge] = {}
@@ -101,16 +125,9 @@ def build_import_graph(repo_root: Path, files: list[str]) -> tuple[list[FileInfo
         all_names = (old.names if old else []) + [n for n in names if n and n != "*"]
         edges[key] = ImportEdge(source, target, all_names[:_MAX_NAMES_SHOWN], (old.weight if old else 0) + 1)
 
-    for rel in rels:
-        full = repo_root / rel
-        try:
-            if full.stat().st_size > _MAX_FILE_BYTES:
-                infos.append(FileInfo(rel.as_posix(), 0, 0, 0, None, "file too large to map"))
-                continue
-            text = full.read_text(encoding="utf-8", errors="replace")
-            data = analyze(full, text)
-        except (OSError, ValueError) as e:
-            infos.append(FileInfo(rel.as_posix(), 0, 0, 0, None, f"could not parse: {type(e).__name__}"))
+    for rel, (text, data, error) in zip(rels, parsed):
+        if error is not None:
+            infos.append(FileInfo(rel.as_posix(), 0, 0, 0, None, error))
             continue
 
         infos.append(
@@ -120,6 +137,7 @@ def build_import_graph(repo_root: Path, files: list[str]) -> tuple[list[FileInfo
             )
         )
         src = rel.as_posix()
+        full = repo_root / rel
         aliases = _nearest_aliases(full, tsconfigs)
         for record in data["imports"]:
             target = _resolve(record["specifier"], full, repo_root, aliases, by_path)

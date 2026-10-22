@@ -49,6 +49,13 @@ export function FunctionView({ repo, path, name, purposes }: Props) {
   const partInFile = explain?.steps.filter((s) => s.includes(`\`${node.name}\``) || s.includes(`\`${node.label}\``)) ?? [];
   const params = node.params ?? [];
   const modelOk = purposes?.source === "model";
+  // Distinguish "the repo's one-time AI pass hasn't resolved yet" (purposes === null) from
+  // "it resolved, and there's a real reason the model isn't being used" (purposes.note) -
+  // a flat "AI explanations are off for this repo" tooltip reads as a permanent setting even
+  // when the real cause is a shared rate limit clearing in a few seconds.
+  const modelReason = purposes === null
+    ? "AI explanations are still loading for this repo - try again in a moment."
+    : (purposes?.note ?? "AI explanations aren't available for this repo.");
 
   return (
     <div className="screen scroll">
@@ -60,10 +67,11 @@ export function FunctionView({ repo, path, name, purposes }: Props) {
             <p className="lead">{purpose ?? "No description."}</p>
           </div>
           <div className="row">
-            <button className="ghost" onClick={() => narrate.run(node.id)} disabled={narrate.loading || !modelOk} title={modelOk ? undefined : "AI explanations are off for this repo"}><Sparkle /> {narrate.loading ? "Explaining…" : "Explain in detail"}</button>
+            <button className="ghost" onClick={() => narrate.run(node.id)} disabled={narrate.loading || !modelOk} title={modelOk ? undefined : modelReason}><Sparkle /> {narrate.loading ? "Explaining…" : "Explain in detail"}</button>
             <button className="ghost" onClick={() => drift.run(node.id)} disabled={drift.loading}>{drift.loading ? "Checking…" : "Check its docs"}</button>
           </div>
         </header>
+        {!modelOk && <p className="note" style={{ margin: "-4px 0 14px" }}>{modelReason}</p>}
 
         <div className="io">
           <div className="io-col">

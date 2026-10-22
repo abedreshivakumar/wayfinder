@@ -68,6 +68,7 @@ export interface Structure {
   files: StructFile[]; file_edges: ImportEdge[]; reading_order: string[]; reading_similar: Record<string, number>; hidden: number; truncated: boolean;
 }
 export interface Purposes { modules: Record<string, string>; files: Record<string, string>; source: "model" | "docstrings"; note: string | null }
+export interface RepoSummary { summary: string | null; source: "model" | "none"; note: string | null }
 export interface FileExplanation { file: string; summary: string; steps: string[]; functions: Record<string, string>; cached: boolean }
 
 export interface Symbol { qualified_name: string; kind: number; line: number; col: number }
@@ -125,6 +126,7 @@ export const api = {
   explainFile: (repo: string, file: string) => post<FileExplanation>("/explain-file", { repo, file }),
   overview: (repo: string) => request<Structure>(`/overview?${query({ repo })}`),
   purposes: (repo: string) => request<Purposes>(`/purposes?${query({ repo })}`),
+  repoSummary: (repo: string) => request<RepoSummary>(`/repo-summary?${query({ repo })}`),
   files: (repo: string) => request<{ files: string[] }>(`/files?${query({ repo })}`).then((r) => r.files),
   symbols: (repo: string, file: string) =>
     request<{ symbols: Symbol[] }>(`/symbols?${query({ repo, file })}`).then((r) => r.symbols),

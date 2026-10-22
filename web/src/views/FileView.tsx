@@ -25,6 +25,7 @@ export function FileView({ repo, path, structure, purposes, onRead }: Props) {
   const [showOutside, setShowOutside] = useState<boolean | null>(null); // null = decide by size
   const file = structure.files.find((f) => f.path === path);
   const modelOk = purposes?.source === "model";
+  const purposesPending = purposes === null; // the repo's one-time AI pass hasn't resolved yet - not the same as "no model"
 
   useEffect(() => {
     let live = true;
@@ -193,7 +194,14 @@ export function FileView({ repo, path, structure, purposes, onRead }: Props) {
               </>
             )}
             {!explain && modelOk && !explainError && <div className="skeleton"><span className="shimmer wide" /><span className="shimmer" /><span className="shimmer" /><span className="shimmer short" /></div>}
-            {(!modelOk || explainError) && graph && (
+            {purposesPending && graph && (
+              <>
+                <p className="big"><Inline text={graph.summary.text} /></p>
+                <div className="skeleton"><span className="shimmer short" /></div>
+                <p className="note">Writing AI descriptions for this repo - on a large repo this can take a few minutes under the model's rate limit.</p>
+              </>
+            )}
+            {!purposesPending && (!modelOk || explainError) && graph && (
               <>
                 <p className="big"><Inline text={graph.summary.text} /></p>
                 <p className="note">{explainError ?? purposes?.note ?? "A model isn't available, so this is built from the code's structure only."}</p>

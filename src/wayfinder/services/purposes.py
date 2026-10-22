@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from wayfinder.agents.prompts import purposes as prompts
+from wayfinder.agents.prompts import repo_summary as summary_prompts
 from wayfinder.agents.prompts.json_reply import parse_json_object
 from wayfinder.core.errors import NotConfigured, RateLimited, WayfinderError
 from wayfinder.guardrails import inputs
@@ -100,6 +101,51 @@ class PurposeService:
         if failures:
             note = f"some purposes are from docstrings: {failures[0]}"
         return {"modules": module_text, "files": file_text, "source": "model", "note": note}
+
+    def repo_summary(self, repo: str) -> dict[str, Any]:
+        """2-3 plain-English sentences on what this repo is and what it's for - a newcomer's
+        first orientation, shown above the module/file breakdown. One model call, cached by
+        its exact prompt like every other model answer here; `source`/`note` say whether it
+        came from the model or isn't available, the same shape as `purposes()`."""
+        repo_root = inputs.resolve_repo(repo)
+        structure = self._overview.structure(repo)
+
+        llm, note = self._model(repo_root)
+        if llm is None:
+            return {"summary": None, "source": "none", "note": note}
+
+        core_files = [f for f in structure["files"] if not f["noise"]]
+        modules = structure["modules"] if structure["mode"] == "modules" else [
+            {"key": "(root)", "name": structure["repo"], "layer": "core", "files": [f["path"] for f in core_files]}
+        ]
+        entry_purposes = {f["path"]: f["doc"] for f in core_files if f["layer"] == "entry" and f["doc"]}
+        prompt = summary_prompts.build_prompt(structure["repo"], modules, entry_purposes)
+        digest = hashlib.sha256((summary_prompts.SYSTEM + prompt).encode()).hexdigest()
+
+        guarded = self._access.guarded(llm)
+        with self._ctx.lock:
+            cached = self._ctx.store.get_path_explanation(digest)
+        for attempt in range(_RATE_LIMIT_RETRIES + 1):
+            if cached is not None:
+                break
+            try:
+                cached = guarded.complete(summary_prompts.SYSTEM, prompt)
+            except RateLimited as e:
+                if attempt == _RATE_LIMIT_RETRIES:
+                    return {"summary": None, "source": "none", "note": str(e)}
+                time.sleep(min(e.retry_after + 1, 65))
+            except WayfinderError as e:
+                return {"summary": None, "source": "none", "note": str(e)}
+
+        if cached is not None and not self._stored(digest):
+            with self._ctx.lock:
+                self._ctx.store.set_path_explanation(digest, cached, guarded.model)
+
+        reply = parse_json_object(cached) if cached else None
+        text = reply.get("summary") if reply else None
+        if not isinstance(text, str) or not text.strip():
+            return {"summary": None, "source": "none", "note": "the model's reply didn't include a summary"}
+        return {"summary": text.strip(), "source": "model", "note": None}
 
     def _stored(self, digest: str) -> bool:
         with self._ctx.lock:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 from wayfinder.analysis.outline import FunctionInfo, Outline, Param, SchemaInfo
@@ -25,6 +26,10 @@ _CACHE_LIMIT = 2_000  # files; oldest dropped first, so a long-lived server does
 # that hasn't changed since the last ask is pure waste - one Node subprocess per file per
 # load instead of two was the actual cause of the JS/TS lag on first opening a repo.
 _cache: dict[tuple[str, int], dict] = {}
+# imports.py now fires analyze() calls from several threads at once (one Node process per
+# file, parallelized so opening a repo costs roughly the slowest file instead of the sum of
+# all of them) - the lock just keeps the check-then-write below atomic across those threads.
+_cache_lock = threading.Lock()
 
 
 def analyze(path: Path, source: str) -> dict:
@@ -36,15 +41,19 @@ def analyze(path: Path, source: str) -> dict:
     except OSError:
         key = None  # file doesn't exist yet (the no-real-file branch below); never cached
 
-    if key is not None and key in _cache:
-        return _cache[key]
+    if key is not None:
+        with _cache_lock:
+            cached = _cache.get(key)
+        if cached is not None:
+            return cached
 
     result = _run(path, source)
 
     if key is not None:
-        if len(_cache) >= _CACHE_LIMIT:
-            _cache.pop(next(iter(_cache)))  # drop the oldest entry (dicts keep insertion order)
-        _cache[key] = result
+        with _cache_lock:
+            if len(_cache) >= _CACHE_LIMIT:
+                _cache.pop(next(iter(_cache)))  # drop the oldest entry (dicts keep insertion order)
+            _cache[key] = result
     return result
 
 

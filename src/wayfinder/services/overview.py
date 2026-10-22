@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from wayfinder.analysis.structure import build_structure
 from wayfinder.languages import build_import_graph, outline_for
@@ -73,7 +74,12 @@ class OverviewService:
         qualified = {f"#{s.line - 1}:{s.col - 1}": s.qualified_name for s in symbols}
 
         def add_node(n: dict[str, Any]) -> None:
-            path = Path(n["file"].removeprefix("file://"))
+            # `n["file"]` is a raw `file://` URI, percent-encoded by pyright (a space in a
+            # folder name comes back as `%20`) - naively stripping the scheme instead of
+            # decoding it left every node's path mismatched against `repo_root` whenever the
+            # repo lived under a path with spaces (or any other reserved character), so every
+            # node looked "external" and got silently dropped, emptying the whole graph.
+            path = Path(unquote(urlparse(n["file"]).path))
             try:
                 rel = path.resolve().relative_to(repo_root).as_posix()
             except ValueError:

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
-import { api, type Purposes, type Structure } from "./api";
+import { api, type Purposes, type RepoSummary, type Structure } from "./api";
 import { AskTab } from "./AskTab";
 import { baseName } from "./format";
 import { Palette } from "./Palette";
@@ -30,6 +30,7 @@ export default function App() {
   const [repo, setRepo] = useState<string>(() => recent()[0] ?? "");
   const [structure, setStructure] = useState<Structure | null>(null);
   const [purposes, setPurposes] = useState<Purposes | null>(null);
+  const [repoSummary, setRepoSummary] = useState<RepoSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
@@ -37,11 +38,12 @@ export default function App() {
   const { markRead } = useReadFiles(repo);
 
   const load = useCallback(async (path: string) => {
-    setLoading(true); setError(null); setPurposes(null);
+    setLoading(true); setError(null); setPurposes(null); setRepoSummary(null);
     try {
       const s = await api.overview(path);
       setStructure(s); setRepo(path); remember(path); setSwitching(false);
       api.purposes(path).then(setPurposes).catch((e) => setPurposes({ modules: {}, files: {}, source: "docstrings", note: String(e.message ?? e) }));
+      api.repoSummary(path).then(setRepoSummary).catch((e) => setRepoSummary({ summary: null, source: "none", note: String(e.message ?? e) }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -85,7 +87,7 @@ export default function App() {
         </nav>
       </header>
       <main className="main">
-        {route.view === "repo" && <Overview structure={structure} purposes={purposes} />}
+        {route.view === "repo" && <Overview structure={structure} purposes={purposes} repoSummary={repoSummary} />}
         {route.view === "module" && <ModuleView key={route.key} structure={structure} purposes={purposes} moduleKey={route.key} />}
         {route.view === "file" && <FileView key={route.path} repo={repo} path={route.path} structure={structure} purposes={purposes} onRead={markRead} />}
         {route.view === "function" && <FunctionView key={route.path + route.name} repo={repo} path={route.path} name={route.name} purposes={purposes} />}
@@ -131,11 +133,12 @@ function Welcome({ initial, loading, error, onLoad, onCancel }: { initial: strin
 
   return (
     <div className="welcome">
+      <WelcomeBackdrop />
       <div className="welcome-grid">
         <div className="welcome-card">
           <div className="brand big"><Logo size={26} /> Wayfinder</div>
           <h1>See how a codebase <span className="accent-text">really</span> fits together.</h1>
-          <p className="muted">Point it at a Python, JavaScript or TypeScript repository. You get a map of its modules, how data flows between functions, and a plain-English walkthrough of every file — grounded in real static analysis, not a guess.</p>
+          <p className="muted">Point it at a Python, JavaScript or TypeScript repository. You get a map of its modules, how data flows between functions, and an AI generated walkthrough of every file, grounded in real static analysis, not inference.</p>
           <div className="pills">
             <span className="pill"><i className="dot layer-entry" />Call graph</span>
             <span className="pill"><i className="dot layer-core" />Data flow</span>
@@ -178,28 +181,118 @@ function LockIcon() {
   return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>;
 }
 
-// A decorative, non-interactive preview of the real graph view - three layer bands with a
-// few nodes and connecting lines, built from the same colour tokens the app itself uses.
-// Purely visual: it teases what the tool actually draws, instead of the welcome screen
-// being a bare form on an empty gradient.
+// A faint, full-bleed mesh behind the whole welcome screen - a loose grid of points, each
+// linked to its two nearest neighbours, with a handful of edges carrying a slow travelling
+// dash (echoing the graphic's "data flowing along a call" look). Computed once at module
+// load, not per render - it's static set dressing, not something that needs to react to
+// anything. Opacity fades in from the left (over the text) so it reads as atmosphere behind
+// the copy, not noise competing with it.
+interface BgPoint { x: number; y: number }
+const BG_W = 1600, BG_H = 900;
+const BG_POINTS: BgPoint[] = (() => {
+  const cols = 13, rows = 9, pts: BgPoint[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      pts.push({
+        x: (c + 0.5) * (BG_W / cols) + (Math.random() - 0.5) * 80,
+        y: (r + 0.5) * (BG_H / rows) + (Math.random() - 0.5) * 60,
+      });
+    }
+  }
+  return pts;
+})();
+const BG_EDGES: [number, number][] = (() => {
+  const dist = (a: BgPoint, b: BgPoint) => Math.hypot(a.x - b.x, a.y - b.y);
+  const seen = new Set<string>();
+  const edges: [number, number][] = [];
+  BG_POINTS.forEach((p, i) => {
+    BG_POINTS
+      .map((q, j) => ({ j, d: dist(p, q) }))
+      .filter((e) => e.j !== i)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 3)
+      .forEach(({ j }) => {
+        const key = i < j ? `${i}-${j}` : `${j}-${i}`;
+        if (!seen.has(key)) { seen.add(key); edges.push(i < j ? [i, j] : [j, i]); }
+      });
+  });
+  return edges;
+})();
+
+// A handful of points are "hubs" - bigger, brighter, gently pulsing - so the mesh reads as
+// a network with some structure to it instead of uniform dots.
+const BG_HUBS = new Set([5, 14, 23, 38, 47, 59, 71, 84, 93, 104]);
+
+function WelcomeBackdrop() {
+  return (
+    <svg className="welcome-backdrop" viewBox={`0 0 ${BG_W} ${BG_H}`} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      {BG_EDGES.map(([a, b], i) => {
+        const p1 = BG_POINTS[a], p2 = BG_POINTS[b];
+        return <line key={`${a}-${b}`} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} className={`bg-edge bg-edge-${i % 6}`} />;
+      })}
+      {BG_POINTS.map((p, i) =>
+        BG_HUBS.has(i)
+          ? <circle key={i} cx={p.x} cy={p.y} r="4.5" className={`bg-dot bg-hub bg-hub-${i % 3}`} />
+          : <circle key={i} cx={p.x} cy={p.y} r={i % 3 === 0 ? 2.4 : 1.6} className="bg-dot" />
+      )}
+    </svg>
+  );
+}
+
+// A decorative, non-interactive preview of the real graph view - three layer bands with
+// labelled nodes, a denser web of connections, and small dots travelling along the edges
+// (standing in for data moving through calls) - built from the same colour tokens the app
+// itself uses. Purely visual: it teases what the tool actually draws, instead of the
+// welcome screen being a bare form on an empty gradient.
+const WG_NODE = { w: 86, h: 34 };
+type WgNode = { id: string; x: number; y: number; label: string; cls: string };
+const WG_NODES: WgNode[] = [
+  { id: "server", x: 30, y: 46, label: "server.ts", cls: "wg-entry-n" },
+  { id: "cli", x: 166, y: 46, label: "cli.ts", cls: "wg-entry-n" },
+  { id: "webhook", x: 302, y: 46, label: "webhook.ts", cls: "wg-entry-n" },
+  { id: "auth", x: 30, y: 188, label: "authorize()", cls: "wg-core-n wg-focus" },
+  { id: "validate", x: 166, y: 188, label: "validate()", cls: "wg-core-n" },
+  { id: "resolve", x: 302, y: 188, label: "resolve()", cls: "wg-core-n" },
+  { id: "handler", x: 98, y: 244, label: "handler()", cls: "wg-core-n" },
+  { id: "mapRows", x: 234, y: 244, label: "mapRows()", cls: "wg-core-n" },
+  { id: "user", x: 30, y: 368, label: "User", cls: "wg-data-n" },
+  { id: "schema", x: 166, y: 368, label: "Schema", cls: "wg-data-n" },
+  { id: "event", x: 302, y: 368, label: "Event", cls: "wg-data-n" },
+];
+const wgCenter = (id: string) => {
+  const n = WG_NODES.find((n) => n.id === id)!;
+  return { x: n.x + WG_NODE.w / 2, y: n.y + WG_NODE.h / 2 };
+};
+const WG_EDGES = [
+  ["server", "auth"], ["server", "validate"], ["cli", "handler"], ["webhook", "resolve"],
+  ["auth", "handler"], ["validate", "handler"], ["validate", "mapRows"], ["resolve", "mapRows"],
+  ["handler", "user"], ["handler", "schema"], ["mapRows", "schema"], ["mapRows", "event"],
+];
+function wgPath(a: string, b: string): string {
+  const p1 = wgCenter(a), p2 = wgCenter(b);
+  const midY = (p1.y + p2.y) / 2;
+  return `M${p1.x} ${p1.y} C ${p1.x} ${midY}, ${p2.x} ${midY}, ${p2.x} ${p2.y}`;
+}
 function WelcomeGraphic() {
   return (
     <svg className="welcome-graphic" viewBox="0 0 420 440" fill="none" aria-hidden="true">
-      <rect x="20" y="16" width="380" height="110" rx="16" className="wg-band wg-entry" />
-      <rect x="20" y="158" width="380" height="140" rx="16" className="wg-band wg-core" />
-      <rect x="20" y="330" width="380" height="94" rx="16" className="wg-band wg-data" />
-      <path d="M120 86 L120 180" className="wg-edge wg-e1" />
-      <path d="M300 86 L220 200" className="wg-edge wg-e2" />
-      <path d="M160 228 L300 228" className="wg-edge wg-e3" />
-      <path d="M160 266 L120 360" className="wg-edge wg-e4" />
-      <path d="M280 266 L300 360" className="wg-edge wg-e5" />
-      <rect x="76" y="48" width="88" height="40" rx="9" className="wg-node wg-entry-n" />
-      <rect x="256" y="48" width="88" height="40" rx="9" className="wg-node wg-entry-n" />
-      <rect x="76" y="192" width="88" height="40" rx="9" className="wg-node wg-core-n wg-focus" />
-      <rect x="236" y="192" width="88" height="40" rx="9" className="wg-node wg-core-n" />
-      <rect x="156" y="252" width="88" height="40" rx="9" className="wg-node wg-core-n" />
-      <rect x="76" y="364" width="88" height="40" rx="9" className="wg-node wg-data-n" />
-      <rect x="256" y="364" width="88" height="40" rx="9" className="wg-node wg-data-n" />
+      <rect x="20" y="16" width="380" height="104" rx="16" className="wg-band wg-entry" />
+      <rect x="20" y="152" width="380" height="146" rx="16" className="wg-band wg-core" />
+      <rect x="20" y="334" width="380" height="90" rx="16" className="wg-band wg-data" />
+      {WG_EDGES.map(([a, b], i) => (
+        <path key={a + b} d={wgPath(a, b)} className={`wg-edge wg-e${i % 4}`} />
+      ))}
+      {WG_EDGES.slice(0, 7).map(([a, b], i) => (
+        <circle key={`dot-${a}${b}`} r="2.6" className={`wg-dot wg-dot-c${i % 3}`}>
+          <animateMotion dur={`${2.6 + (i % 3) * 0.5}s`} begin={`${i * 0.3}s`} repeatCount="indefinite" path={wgPath(a, b)} />
+        </circle>
+      ))}
+      {WG_NODES.map((n) => (
+        <g key={n.id}>
+          <rect x={n.x} y={n.y} width={WG_NODE.w} height={WG_NODE.h} rx="8" className={`wg-node ${n.cls}`} />
+          <text x={n.x + WG_NODE.w / 2} y={n.y + WG_NODE.h / 2 + 4} textAnchor="middle" className="wg-label">{n.label}</text>
+        </g>
+      ))}
     </svg>
   );
 }

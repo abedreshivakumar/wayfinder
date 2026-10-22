@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import type { Layer, Purposes, Structure } from "../api";
+import type { Layer, Purposes, RepoSummary, Structure } from "../api";
 import { Canvas, type CanvasBand, type CanvasEdge, type CanvasNode } from "../canvas/Canvas";
 import { bandLayout, connect } from "../canvas/layout";
 import { baseName, listing, plural } from "../format";
 import { go } from "../route";
+import { Sparkle } from "./ModuleView";
 
 const LAYERS: { id: Layer; title: string; hint: string }[] = [
   { id: "entry", title: "Entry points", hint: "where things start" },
@@ -14,9 +15,9 @@ const CARD = { w: 216, h: 118 };
 
 interface Unit { id: string; name: string; layer: Layer; meta: string; mono: boolean; open: () => void }
 
-interface Props { structure: Structure; purposes: Purposes | null }
+interface Props { structure: Structure; purposes: Purposes | null; repoSummary?: RepoSummary | null }
 
-export function Overview({ structure, purposes }: Props) {
+export function Overview({ structure, purposes, repoSummary }: Props) {
   const [hover, setHover] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const fileByPath = useMemo(() => new Map(structure.files.map((f) => [f.path, f])), [structure]);
@@ -129,6 +130,30 @@ export function Overview({ structure, purposes }: Props) {
             </p>
           </div>
         </header>
+        {repoSummary?.summary && (
+          <div className="repo-summary">
+            <div className="repo-summary-icon"><Sparkle /></div>
+            <div>
+              <p className="eyebrow muted-eyebrow">What this repo does</p>
+              <p className="repo-summary-text">{repoSummary.summary}</p>
+            </div>
+          </div>
+        )}
+        {repoSummary === null && (
+          <div className="repo-summary skeleton-line">
+            <div className="repo-summary-icon"><Sparkle /></div>
+            <div className="skeleton" style={{ flex: 1 }}><span className="shimmer wide" /><span className="shimmer short" /></div>
+          </div>
+        )}
+        {repoSummary && !repoSummary.summary && repoSummary.note && (
+          <div className="repo-summary repo-summary-muted">
+            <div className="repo-summary-icon"><Sparkle /></div>
+            <div>
+              <p className="eyebrow muted-eyebrow">What this repo does</p>
+              <p className="repo-summary-text muted">{repoSummary.note}</p>
+            </div>
+          </div>
+        )}
         <Canvas
           nodes={nodes} edges={edges} bands={bands} fitKey={`${structure.repo}:${units.length}`}
           onHover={setHover} onSelect={setSelected}

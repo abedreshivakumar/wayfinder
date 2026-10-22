@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
+DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 
 
 def home_dir() -> Path:
@@ -48,7 +49,9 @@ class Limits:
 class Settings:
     db_path: Path
     gemini_api_key: str | None = None
+    anthropic_api_key: str | None = None
     model: str = DEFAULT_MODEL
+    claude_model: str = DEFAULT_CLAUDE_MODEL
     limits: Limits = field(default_factory=Limits)
     # Repos whose source may be sent to an external (hosted) model. Empty means none:
     # code never leaves the machine unless its repo is named here.
@@ -71,10 +74,24 @@ class Settings:
 
         db_path = setting("WAYFINDER_DB")
         allowed = setting("WAYFINDER_LLM_ALLOWED_REPOS") or ""  # paths separated like $PATH
+        anthropic_key = setting("ANTHROPIC_API_KEY")
+        calls_per_minute = setting("WAYFINDER_LLM_CALLS_PER_MINUTE")
+        if calls_per_minute:
+            limits = Limits(llm_calls_per_minute=int(calls_per_minute))
+        elif anthropic_key:
+            # A Claude API key's rate limit is an account-level setting, not a fixed
+            # per-model number this file can know - 50/min is a conservative default for a
+            # Build tier account; raise WAYFINDER_LLM_CALLS_PER_MINUTE if yours allows more.
+            limits = Limits(llm_calls_per_minute=50)
+        else:
+            limits = Limits()  # Gemini's free tier: 14/min (see Limits.llm_calls_per_minute)
         return cls(
             db_path=Path(db_path) if db_path else home_dir() / "graph.db",
             gemini_api_key=setting("GEMINI_API_KEY"),
+            anthropic_api_key=anthropic_key,
             model=setting("WAYFINDER_MODEL") or DEFAULT_MODEL,
+            claude_model=setting("WAYFINDER_CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL,
+            limits=limits,
             offline=(setting("WAYFINDER_OFFLINE") or "").lower() in ("1", "true", "yes", "on"),
             allow_trace=(setting("WAYFINDER_ALLOW_TRACE") or "").lower() in ("1", "true", "yes", "on"),
             llm_allow_all_repos=allowed.strip() == "*",

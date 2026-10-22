@@ -41,6 +41,14 @@ def purposes(services: ServicesDep, repo: str) -> dict[str, Any]:
     return services.purposes.purposes(repo)
 
 
+@router.get("/repo-summary")
+def repo_summary(services: ServicesDep, repo: str) -> dict[str, Any]:
+    """2-3 plain-English sentences on what this repo is and what problem it solves - a
+    newcomer's first orientation, shown above the modules. Written by the model when the
+    repo may be sent to one (cached after the first time); `source`/`note` say which and why."""
+    return services.purposes.repo_summary(repo)
+
+
 @router.get("/repo-map")
 def repo_map(services: ServicesDep, repo: str) -> dict[str, Any]:
     """Every file with its size, and which files import which: the whole-repo picture.
