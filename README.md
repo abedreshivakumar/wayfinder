@@ -93,51 +93,6 @@ claude mcp add wayfinder -- uv run --directory "$PWD" python -m wayfinder.mcp_se
 Then ask your agent something like *"use wayfinder to show who calls `fetch_user` in
 `app.py` of `/path/to/repo`"*.
 
-## Example
-
-Call graph for `handle_login` in the bundled sample repo
-(`tests/fixtures/sample_repo/app.py`), trimmed. Real node ids are long file URIs; they are
-shown here as function names for readability.
-
-```json
-{
-  "root_id": "file:///path/to/repo/app.py#14:4",
-  "edges": [
-    { "from_id": "handle_login", "to_id": "fetch_user" },
-    { "from_id": "handle_login", "to_id": "process" }
-  ],
-  "call_labels": [
-    { "caller_id": "handle_login", "callee_id": "fetch_user", "line": 16,
-      "args": [{ "text": "uid", "type": "str" }],
-      "returns_var": "user", "returns_type": "User" },
-    { "caller_id": "handle_login", "callee_id": "process", "line": 17,
-      "args": [{ "text": "user", "type": "User" }],
-      "returns_var": null, "returns_type": "None" }
-  ],
-  "flow_links": [
-    { "caller": "handle_login", "producer": "fetch_user", "var": "user",
-      "type": "User", "consumer": "process" }
-  ]
-}
-```
-
-`flow_links` is the point: the `User` that `fetch_user` returns is the same value `process`
-receives. Documentation drift, for a function whose docstring has gone stale:
-
-```json
-{
-  "name": "send_report",
-  "findings": [
-    { "severity": "high",   "kind": "param-not-in-signature", "line": 2,
-      "message": "the docstring documents parameter 'timeout', but the function has no such parameter (its parameters are: user, retries)" },
-    { "severity": "medium", "kind": "returns-without-value", "line": 2,
-      "message": "the docstring describes a return value, but the function never returns one" },
-    { "severity": "low",    "kind": "param-undocumented", "line": 2,
-      "message": "parameter 'retries' is missing from the docstring's parameter list" }
-  ],
-  "model_review": "skipped: no Gemini API key found ..."
-}
-```
 
 ## Installation
 
