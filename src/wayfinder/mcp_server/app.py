@@ -10,8 +10,8 @@ mcp = MCPServer(
     "wayfinder",
     instructions=(
         "Answers 'who calls this function, what does it call, and what data flows "
-        "between them' for Python code, using pyright's real analysis rather than "
-        "guesses. Every tool needs the repo root (absolute path), a file path relative "
-        "to it, and a function/method/class name."
+        "between them' for Python and JavaScript/TypeScript code, using real static "
+        "analysis rather than guesses. Every tool needs the repo root (absolute path), "
+        "a file path relative to it, and a function/method/class name."
     ),
 )

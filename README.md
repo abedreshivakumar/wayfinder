@@ -1,15 +1,16 @@
 # Wayfinder
 
-**Find your way around unfamiliar Python code.** Point at a function and see who calls it,
-what it calls, and what data flows between them - then get a plain-language explanation of
-that function, or of the whole chain of calls between two of them.
+**Find your way around unfamiliar Python, JavaScript or TypeScript code.** Point at a
+function and see who calls it, what it calls, and what data flows between them - then get
+a plain-language explanation of that function, or of the whole chain of calls between two
+of them.
 
 > **Status:** early stage (`0.1.0`). It works end to end and is used through an MCP server
 > or an HTTP API. There is no automated test suite yet - see [Limitations](#limitations).
 
-The call graph and the data flow come from real static analysis (pyright), not from a model
-guessing. Models only *explain* what the analysis already established, and they are
-optional.
+The call graph and the data flow come from real static analysis - pyright for Python,
+`typescript-language-server` for JS/TS - not from a model guessing. Models only *explain*
+what the analysis already established, and they are optional.
 
 ```text
 fetch_user --[user: User]--> process     # the value one call returns, passed into the next
@@ -69,7 +70,7 @@ the language server first, so the graph is exact and every explanation is ground
   functions really called which, then compares that with the static graph: calls static
   analysis missed (callbacks, dispatch tables) and calls that exist in the code but were never
   reached. It executes the repository's code, so it is off unless you enable it.
-- **Repo map.** Every Python file in a repository and which files import which, with a
+- **Repo map.** Every Python, JS/TS file in a repository and which files import which, with a
   plain-language summary built from the analysis alone, so it needs no model.
 - **File view and file explanation.** One file drawn as its functions and the calls between them
   (and out to other files of the repo), with the data flowing along those calls. `POST /explain-file`
@@ -145,6 +146,7 @@ receives. Documentation drift, for a function whose docstring has gone stale:
 - Python 3.12 or newer
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - Node.js, for `pyright` (`npm install -g pyright`; `pyright-langserver` must be on your `PATH`)
+  and for analyzing JS/TS repos (`typescript-language-server`, installed locally - see below)
 - Only for `/ask`: [Claude Code](https://claude.com/claude-code) installed and logged in. No API key is
   needed; the Claude Agent SDK uses that login
 
@@ -152,6 +154,7 @@ receives. Documentation drift, for a function whose docstring has gone stale:
 
 ```bash
 uv sync
+cd src/wayfinder/languages/javascript/tools && npm install && cd -   # only needed to analyze JS/TS repos
 ```
 
 The analyzed project's own dependencies should be installed in the Python environment on your
@@ -223,7 +226,7 @@ curl 'http://localhost:8000/graph?repo=/path/to/repo&file=app.py&symbol=handle_l
 | `POST /ask` | `{"repo", "question"}` | `text`, `tools_used`, `turns` |
 | `POST /trace` | `{"repo", "file", "function"?, "args"?, "kwargs"?}` | `nodes`, `edges` (each with a `status`), `error`, `returned`, `output` |
 | `POST /explain-file` | `{"repo", "file"}` | Plain-language walkthrough of one file |
-| `GET /files` | query: `repo` | `files` (Python files, relative to the repo) |
+| `GET /files` | query: `repo` | `files` (files of a supported language, relative to the repo) |
 | `GET /symbols` | query: `repo`, `file` | `symbols` (callable names with positions) |
 | `GET /repo-map` | query: `repo` | `files`, `edges` (which file imports which), `truncated` |
 | `GET /file-graph` | query: `repo`, `file` | The file's functions, the calls between them and the data flow along them |
@@ -279,7 +282,7 @@ are deliberately strict:
 | **Untrusted source** | Repository code is fenced so it cannot close its own block, and the model is instructed never to follow instructions found inside it |
 | **Limits** | Hops are capped at 5, prompts at 30,000 characters, hosted-model calls at 20 per minute. Cached explanations cost nothing |
 | **Ask (`/ask`)** | The question and everything the tools find go to Anthropic through your Claude Code login, so it is refused in offline mode and unless the repo is allowlisted. The agent gets **no built-in tools** (no shell, no file access), none of your personal Claude settings or hooks, and runs in an empty temporary directory. Its tools are bound to the one repo you named, take no repo argument, and return compact text with relative paths, secrets redacted and size capped. At most 8 turns per question, and each question counts against the rate limit |
-| **Path sandbox** | A request can only read Python files inside the repo it names; `../` and symlinks that leave the repo are refused |
+| **Path sandbox** | A request can only read files of a supported language inside the repo it names; `../` and symlinks that leave the repo are refused |
 | **Withheld source on chains** | In a call-path explanation, source from files outside your allowlist is withheld from the prompt |
 
 **What is stored locally.** `~/.wayfinder/graph.db` holds function names, file paths, call
@@ -292,16 +295,25 @@ and the static drift checks are unaffected and nothing leaves your machine.
 ## How it works
 
 ```text
-request ─▶ services ─▶ analysis ─▶ pyright (LSP) ─── call hierarchy, types
-              │            └─ Python ast ──────────── arguments, assignments
+request ─▶ services ─▶ analysis ─▶ a language server (LSP) ── call hierarchy, types
+              │            └─ outline + imports ──────────── arguments, assignments, schemas
               ├─▶ storage (SQLite) ── graph, labels, cached explanations
               └─▶ agents ─▶ guardrails ─▶ model ───── explanations (optional)
 ```
 
-1. **pyright answers "who calls this / what does this call"** over the Language Server
-   Protocol - exact, compiler-grade answers instead of guesses.
-2. **The Python `ast` module** finds each call's arguments and where its result goes;
-   pyright's hover supplies the types. Together they produce the data-flow labels.
+A `Language` registry (`src/wayfinder/languages/`) picks which implementation runs per file
+extension - everything above it (storage, agents, guardrails, the API, the UI) is identical
+either way:
+
+| | Python | JavaScript/TypeScript |
+| --- | --- | --- |
+| Language server | pyright | `typescript-language-server` |
+| Outline + imports | Python's own `ast` module | the TypeScript compiler API, via a small Node subprocess |
+
+1. **The language server answers "who calls this / what does this call"** over the Language
+   Server Protocol - exact, compiler-grade answers instead of guesses.
+2. **The outline/imports pass** finds each call's arguments and where its result goes; the
+   language server's hover supplies the types. Together they produce the data-flow labels.
 3. **Results are stored in SQLite**, so repeat questions are instant and don't need pyright.
    Re-analysing a function replaces what was stored for it, so calls removed from the code
    disappear from the graph.
@@ -374,10 +386,14 @@ graph (`handle_login` calls `fetch_user` and `process`; `fetch_user` returns a `
 
 - **Static analysis only.** Dynamic dispatch, monkey-patching and callbacks registered at
   runtime are invisible to pyright, so those calls are missing from the graph.
-- **Python only.**
-- **Dependency resolution.** pyright resolves third-party packages from the Python on your
-  `PATH`, not from the analyzed repo's own environment, so types from unresolved packages
-  show as unknown and library internals can appear as nodes.
+- **Python, JavaScript and TypeScript.** The call graph, data flow, repo map and schema
+  detection work for both; **Flow-Tracer (runtime tracing) is Python only** - there's no
+  JS/TS equivalent yet.
+- **Dependency resolution.** pyright resolves third-party Python packages from the Python on
+  your `PATH`, not from the analyzed repo's own environment, so types from unresolved
+  packages show as unknown and library internals can appear as nodes. For JS/TS, a bare
+  package import (`react`, `lodash`) is treated as external and never resolved to a file at
+  all - only relative imports and `tsconfig.json` path aliases are followed.
 - Overloaded builtins such as `print` appear as several nodes, one per overload.
 - **Drift checks** cover functions and methods, not classes. A `Raises` entry that is never
   raised *directly* is reported as low severity, since the exception may come from a callee.
@@ -398,12 +414,15 @@ graph (`handle_login` calls `fetch_user` and `process`; `fetch_user` returns a `
 
 Built: call graph, data flow, MCP and HTTP interfaces, Narrator, Path-Explainer,
 Drift-Checker, File-Explainer, Orchestrator (`/ask`), Flow-Tracer, repo map and file view,
-web UI, guardrails.
+web UI, guardrails, JavaScript/TypeScript support (`src/wayfinder/languages/`) alongside
+Python - proof that the LSP-based design generalizes to a new language server without
+touching the engine above it.
 
 Not yet built:
 
-- Other languages (the LSP-based design is meant to make each one a new language server, not
-  a new engine).
+- A runtime tracer (Flow-Tracer) for JS/TS - it's Python only today.
+- A fourth language, to prove the `Language` seam again on something that isn't two
+  LSP-based static-typed-ish languages.
 
 `artifacts/` holds early design notes, written when the project was still called Donkeymind.
 They predate a restructure of the code, so names and file paths in them are out of date.

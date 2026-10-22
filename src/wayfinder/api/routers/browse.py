@@ -15,7 +15,7 @@ router = APIRouter(tags=["browse"])
 
 @router.get("/files")
 def list_files(services: ServicesDep, repo: str) -> dict[str, Any]:
-    """The Python files in a repo, relative to its root."""
+    """Every file in a repo whose extension a supported language claims, relative to its root."""
     return {"files": services.analysis.list_files(repo)}
 
 

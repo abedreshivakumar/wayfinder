@@ -28,7 +28,7 @@ def _graph(repo: str, file: str, symbol: str, hops: int, direction: Direction | 
 
 @mcp.tool(annotations=READ_ONLY)
 def who_calls(repo: str, file: str, symbol: str, hops: int = 1) -> dict[str, Any]:
-    """Find the callers of a Python function, method or class.
+    """Find the callers of a function, method or class.
 
     Args:
         repo: Absolute path to the repository root.
@@ -46,7 +46,7 @@ def who_calls(repo: str, file: str, symbol: str, hops: int = 1) -> dict[str, Any
 
 @mcp.tool(annotations=READ_ONLY)
 def what_does_this_call(repo: str, file: str, symbol: str, hops: int = 1) -> dict[str, Any]:
-    """Find everything a Python function, method or class calls.
+    """Find everything a function, method or class calls.
 
     Args:
         repo: Absolute path to the repository root.
@@ -81,7 +81,7 @@ def trace_data_flow(repo: str, file: str, symbol: str, hops: int = 1) -> dict[st
 
 @mcp.tool(annotations=READ_ONLY)
 def explain_function(repo: str, file: str, symbol: str) -> dict[str, Any]:
-    """Explain in plain language what a Python function, method or class does.
+    """Explain in plain language what a function, method or class does.
 
     The explanation is written from the real source plus the analyzed call graph (who
     calls it, what it calls, what data it passes on), not from guesses; where something
@@ -132,7 +132,7 @@ def explain_call_path(
 
 @mcp.tool(annotations=READ_ONLY)
 def check_docs_drift(repo: str, file: str, symbol: str) -> dict[str, Any]:
-    """Check whether a Python function's documentation still matches its code.
+    """Check whether a function's documentation still matches its code.
 
     Finds docstrings that have gone stale: a parameter the docstring documents but the
     function doesn't have, a documented return value that is never returned, exceptions

@@ -110,7 +110,7 @@ function Welcome({ initial, loading, error, onLoad, onCancel }: { initial: strin
       <div className="welcome-card">
         <div className="brand big"><Logo size={26} /> Wayfinder</div>
         <h1>Understand a codebase you've never seen.</h1>
-        <p className="muted">Point it at a Python repository. You get a map of how it fits together, a reading path, and every file and function explained.</p>
+        <p className="muted">Point it at a Python, JavaScript or TypeScript repository. You get a map of how it fits together, a reading order, and every file and function explained.</p>
         <form onSubmit={(e) => { e.preventDefault(); if (path.trim()) onLoad(path.trim()); }} className="welcome-form">
           <label className="sr-only" htmlFor="repo">Repository path</label>
           <input id="repo" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/absolute/path/to/a/python/repo" autoFocus />

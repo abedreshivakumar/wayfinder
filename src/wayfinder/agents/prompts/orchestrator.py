@@ -14,7 +14,7 @@ from wayfinder.domain.graph import Node
 from wayfinder.domain.labels import DataFlowGraph
 from wayfinder.domain.results import DriftReport, PathExplanation
 
-SYSTEM = """You help a developer understand an unfamiliar Python codebase. You can only use the tools you were given; they run static analysis on one repository.
+SYSTEM = """You help a developer understand an unfamiliar codebase. You can only use the tools you were given; they run static analysis on one repository.
 
 Rules:
 - Answer ONLY from what the tools return. If the results don't contain the answer, say so and say which tool or which function name would help. Never guess what code does.
