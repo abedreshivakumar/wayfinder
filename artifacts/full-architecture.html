@@ -1,4 +1,4 @@
-<title>Donkeymind Full Architecture</title>
+<title>Wayfinder Full Architecture</title>
 <style>
   :root {
     --bg: #faf8f4; --surface: #ffffff; --surface-2: #f2ede3; --border: #e2ddd0;
@@ -82,7 +82,7 @@
 
   <header class="page">
     <p class="eyebrow">Full system architecture &mdash; all decisions resolved</p>
-    <h1>Donkeymind</h1>
+    <h1>Wayfinder</h1>
     <p class="sub">The whole product: every agent, the full data pipeline, static and dynamic analysis, persistent storage. This is what we're building toward &mdash; day-by-day sequencing comes after the decisions below are made.</p>
   </header>
 
@@ -278,9 +278,9 @@
 
   <section id="mcp">
     <h2><span class="n">06</span>MCP interface</h2>
-    <p class="lede">A thin adapter over the same graph-store query layer the FastAPI backend already uses &mdash; not a second engine, just a second way in. This is what turns Donkeymind from an app you open into a tool Claude Code (or any MCP client) can call mid-task.</p>
+    <p class="lede">A thin adapter over the same graph-store query layer the FastAPI backend already uses &mdash; not a second engine, just a second way in. This is what turns Wayfinder from an app you open into a tool Claude Code (or any MCP client) can call mid-task.</p>
     <figure>
-      <svg viewBox="0 0 820 190" role="img" aria-label="An MCP client such as Claude Code sends a tool call like who_calls or trace_path to the Donkeymind MCP server, which queries the same graph store the web app reads from, and returns structured call-hierarchy and data-flow results.">
+      <svg viewBox="0 0 820 190" role="img" aria-label="An MCP client such as Claude Code sends a tool call like who_calls or trace_path to the Wayfinder MCP server, which queries the same graph store the web app reads from, and returns structured call-hierarchy and data-flow results.">
         <rect class="box" x="20" y="60" width="220" height="70" rx="8"/>
         <text x="130" y="88" text-anchor="middle" font-size="13" font-weight="600">MCP client</text>
         <text x="130" y="106" text-anchor="middle" class="mono dim" font-size="10.5">e.g. Claude Code, mid-task</text>
@@ -289,7 +289,7 @@
         <text x="245" y="85" font-size="10.5" class="mono dim">tool: who_calls / trace_path</text>
 
         <rect class="box-accent" x="340" y="60" width="200" height="70" rx="8"/>
-        <text x="440" y="88" text-anchor="middle" font-size="13" font-weight="600">Donkeymind MCP server</text>
+        <text x="440" y="88" text-anchor="middle" font-size="13" font-weight="600">Wayfinder MCP server</text>
         <text x="440" y="106" text-anchor="middle" class="mono dim" font-size="10.5">thin adapter, no new logic</text>
 
         <path class="edge" marker-end="url(#a1)" d="M540,95 L640,95"/>
@@ -304,6 +304,6 @@
     </figure>
   </section>
 
-  <footer>donkeymind &middot; full architecture &middot; all decisions resolved &mdash; next: day-by-day build plan</footer>
+  <footer>wayfinder &middot; full architecture &middot; all decisions resolved &mdash; next: day-by-day build plan</footer>
 
 </div>
