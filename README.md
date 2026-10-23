@@ -4,7 +4,8 @@
 repo or a function and get a real call graph, the data flowing between calls, and a
 plain-language explanation - grounded in static analysis, not a model guessing at structure.
 
-> **Status:** early stage (`0.1.0`), no automated tests yet. See [Limitations](#limitations).
+> **Status:** early stage (`0.1.0`). A small, focused test suite covers the path sandbox,
+> import resolution, and the call graph - `uv run pytest`. See [Limitations](#limitations).
 
 ![Repo overview: folders grouped into entry points, core logic, and data & schemas, each with an AI-written one-line purpose](docs/screenshots/repo-overview.png)
 
@@ -86,7 +87,7 @@ Settings are read from the environment first, then `~/.wayfinder/.env` (kept out
 repo so a key can't be committed by accident), then a default.
 
 | Variable | Default | Purpose |
-| --- | --- |---|
+| --- | --- | --- |
 | `ANTHROPIC_API_KEY` | none | Preferred model provider when set (Claude) |
 | `GEMINI_API_KEY` | none | Fallback provider when no Anthropic key is set |
 | `WAYFINDER_LLM_CALLS_PER_MINUTE` | 14 (Gemini) / 50 (Claude) | Override the model rate limit |
@@ -135,7 +136,8 @@ already-verified facts into words.
 - **Dependency resolution** - pyright resolves third-party packages from the Python on
   your `PATH`, not the analyzed repo's own environment, so unresolved types show as unknown
 - **Single user, local** - no authentication; meant to run on your own machine
-- **No automated test suite yet**
+- **Test suite is small by design** - covers the path sandbox, import resolution, and the
+  call graph against a known fixture repo, not every code path
 
 `artifacts/` holds the early design docs from before the code was restructured - useful as
 design history, but out of date on names and file paths.
