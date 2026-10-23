@@ -4,6 +4,8 @@
 repo or a function and get a real call graph, the data flowing between calls, and a
 plain-language explanation - grounded in static analysis, not a model guessing at structure.
 
+Demo Link: https://www.loom.com/share/172e884f2b66448c91440b640f707f22
+
 > **Status:** early stage (`0.1.0`). A small, focused test suite covers the path sandbox,
 > import resolution, and the call graph - `uv run pytest`. See [Limitations](#limitations).
 
